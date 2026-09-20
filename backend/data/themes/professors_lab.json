@@ -1,0 +1,93 @@
+{
+  "theme_id": "professors_lab",
+  "title": "교수님의 연구실",
+  "duration_minutes": 60,
+  "difficulty": "2/5",
+  "data_status": "SYNTHETIC_DEMO_DATA",
+  "puzzles": [
+    {
+      "puzzle_id": "lab-p01",
+      "order": 1,
+      "title": "교수님의 연구실 퍼즐 1",
+      "objective": "가상 시연용 퍼즐 1의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p02",
+      "order": 2,
+      "title": "교수님의 연구실 퍼즐 2",
+      "objective": "가상 시연용 퍼즐 2의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p03",
+      "order": 3,
+      "title": "교수님의 연구실 퍼즐 3",
+      "objective": "가상 시연용 퍼즐 3의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p04",
+      "order": 4,
+      "title": "교수님의 연구실 퍼즐 4",
+      "objective": "가상 시연용 퍼즐 4의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p05",
+      "order": 5,
+      "title": "교수님의 연구실 퍼즐 5",
+      "objective": "가상 시연용 퍼즐 5의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p06",
+      "order": 6,
+      "title": "교수님의 연구실 퍼즐 6",
+      "objective": "가상 시연용 퍼즐 6의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p07",
+      "order": 7,
+      "title": "교수님의 연구실 퍼즐 7",
+      "objective": "가상 시연용 퍼즐 7의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p08",
+      "order": 8,
+      "title": "교수님의 연구실 퍼즐 8",
+      "objective": "가상 시연용 퍼즐 8의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p09",
+      "order": 9,
+      "title": "교수님의 연구실 퍼즐 9",
+      "objective": "가상 시연용 퍼즐 9의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p10",
+      "order": 10,
+      "title": "교수님의 연구실 퍼즐 10",
+      "objective": "가상 시연용 퍼즐 10의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p11",
+      "order": 11,
+      "title": "교수님의 연구실 퍼즐 11",
+      "objective": "가상 시연용 퍼즐 11의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "lab-p12",
+      "order": 12,
+      "title": "교수님의 연구실 퍼즐 12",
+      "objective": "가상 시연용 퍼즐 12의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+방탈출 Agent Benchmark FINAL READY
+========================================================================
+
+[Preflight]
+- gate: PASS
+- synthetic SkillPolicy: 8/8
+- synthetic ToolPolicy: 15/15
+- synthetic HardGuard: 9/9
+- 30-case Tool contract: 30/30
+- 30-case Scoring contract: 30/30
+- no-answer-leak audit: 1
+- source cache once: 1
+
+[Frozen test identity]
+- dataset cases: 17
+- dataset sha256: 686a793bc62ccf471b0ec9cd7244103180c200a92db2c6bf913fbfb57fa51225
+- static prompt sha256: 7b8027c086d338aedd06e8d76c252a286ec5c3fbc2ac9fe6ccd5b03ff7839e00
+- runtime policy sha256: 7a521e41b39222f817d7e650e13707397063b2f3682b8b9a492bafb1bf39e2a6
+
+[Prompt]
+- static prompt chars: 4370
+- full SKILL.md is not sent each call
+- fixed prefix kept identical for provider prompt cache
+
+[Gate]
+- any model error => model REJECT
+- service_case_pass must be 100%
+
+[gpt_5_4_mini_test] gpt-5.4-mini-2026-03-17
+- route: 17/17
+- model_case_pass: 15/17
+- deterministic_skill_pass: 17/17
+- deterministic_tool_pass: 17/17
+- service_case_pass: 17/17
+- MODEL GATE: REJECT
+- SERVICE GATE: ACCEPT
+- category breakdown:
+  normal: model=5/6, service=6/6
+  boundary: model=7/7, service=7/7
+  failure: model=3/4, service=4/4
+- model failed ids: 206, 239
+- service failed ids: none
+- prompt total: 30702
+- cached prompt total: 21760
+- uncached prompt total: 8942
+- completion total: 805
+- reasoning total: 0
+- total tokens: 31507
+- completion limit hit: 0/17
+- total latency ms: 15656.27
+- avg latency ms: 920.96
+- median latency ms: 888.75
+- p95 latency ms: 1160.05
+- avg prompt/call: 1806.00
+- avg uncached prompt/call: 526.00
+- avg total/call: 1853.35
+- cases:
+  id=204 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1799 cached=1280 uncached=519 completion=47 reasoning=0 total=1846
+  id=206 model=0 skill=1 guard=CONTINUE tool=1 service=1 prompt=1811 cached=1280 uncached=531 completion=47 reasoning=0 total=1858
+  id=207 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1805 cached=1280 uncached=525 completion=47 reasoning=0 total=1852
+  id=209 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1833 cached=1280 uncached=553 completion=48 reasoning=0 total=1881
+  id=210 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1809 cached=1280 uncached=529 completion=48 reasoning=0 total=1857
+  id=217 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1791 cached=1280 uncached=511 completion=46 reasoning=0 total=1837
+  id=220 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1801 cached=1280 uncached=521 completion=48 reasoning=0 total=1849
+  id=226 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1806 cached=1280 uncached=526 completion=47 reasoning=0 total=1853
+  id=228 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1832 cached=1280 uncached=552 completion=48 reasoning=0 total=1880
+  id=229 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1802 cached=1280 uncached=522 completion=47 reasoning=0 total=1849
+  id=230 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1808 cached=1280 uncached=528 completion=47 reasoning=0 total=1855
+  id=235 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1806 cached=1280 uncached=526 completion=47 reasoning=0 total=1853
+  id=237 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1812 cached=1280 uncached=532 completion=47 reasoning=0 total=1859
+  id=239 model=0 skill=1 guard=CONTINUE tool=1 service=1 prompt=1801 cached=1280 uncached=521 completion=47 reasoning=0 total=1848
+  id=244 model=1 skill=1 guard=BLOCK tool=1 service=1 prompt=1796 cached=1280 uncached=516 completion=47 reasoning=0 total=1843
+  id=245 model=1 skill=1 guard=BLOCK tool=1 service=1 prompt=1793 cached=1280 uncached=513 completion=47 reasoning=0 total=1840
+  id=248 model=1 skill=1 guard=BLOCK tool=1 service=1 prompt=1797 cached=1280 uncached=517 completion=50 reasoning=0 total=1847
+
+[gpt_5_6_luna_test] gpt-5.6-luna
+- route: 17/17
+- model_case_pass: 15/17
+- deterministic_skill_pass: 17/17
+- deterministic_tool_pass: 17/17
+- service_case_pass: 17/17
+- MODEL GATE: REJECT
+- SERVICE GATE: ACCEPT
+- category breakdown:
+  normal: model=5/6, service=6/6
+  boundary: model=7/7, service=7/7
+  failure: model=3/4, service=4/4
+- model failed ids: 206, 239
+- service failed ids: none
+- prompt total: 30702
+- cached prompt total: 29869
+- uncached prompt total: 833
+- completion total: 1929
+- reasoning total: 1030
+- total tokens: 32631
+- completion limit hit: 0/17
+- total latency ms: 23363.60
+- avg latency ms: 1374.33
+- median latency ms: 1257.92
+- p95 latency ms: 2934.89
+- avg prompt/call: 1806.00
+- avg uncached prompt/call: 49.00
+- avg total/call: 1919.47
+- cases:
+  id=204 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1799 cached=1757 uncached=42 completion=86 reasoning=33 total=1885
+  id=206 model=0 skill=1 guard=CONTINUE tool=1 service=1 prompt=1811 cached=1757 uncached=54 completion=284 reasoning=231 total=2095
+  id=207 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1805 cached=1757 uncached=48 completion=145 reasoning=91 total=1950
+  id=209 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1833 cached=1757 uncached=76 completion=102 reasoning=49 total=1935
+  id=210 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1809 cached=1757 uncached=52 completion=97 reasoning=44 total=1906
+  id=217 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1791 cached=1757 uncached=34 completion=45 reasoning=0 total=1836
+  id=220 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1801 cached=1757 uncached=44 completion=97 reasoning=44 total=1898
+  id=226 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1806 cached=1757 uncached=49 completion=86 reasoning=33 total=1892
+  id=228 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1832 cached=1757 uncached=75 completion=89 reasoning=36 total=1921
+  id=229 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1802 cached=1757 uncached=45 completion=115 reasoning=61 total=1917
+  id=230 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1808 cached=1757 uncached=51 completion=81 reasoning=28 total=1889
+  id=235 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1806 cached=1757 uncached=49 completion=102 reasoning=49 total=1908
+  id=237 model=1 skill=1 guard=CONTINUE tool=1 service=1 prompt=1812 cached=1757 uncached=55 completion=102 reasoning=49 total=1914
+  id=239 model=0 skill=1 guard=CONTINUE tool=1 service=1 prompt=1801 cached=1757 uncached=44 completion=176 reasoning=122 total=1977
+  id=244 model=1 skill=1 guard=BLOCK tool=1 service=1 prompt=1796 cached=1757 uncached=39 completion=88 reasoning=35 total=1884
+  id=245 model=1 skill=1 guard=BLOCK tool=1 service=1 prompt=1793 cached=1757 uncached=36 completion=104 reasoning=51 total=1897
+  id=248 model=1 skill=1 guard=BLOCK tool=1 service=1 prompt=1797 cached=1757 uncached=40 completion=130 reasoning=74 total=1927
+
+[Cross-model final decision]
+- critical output parity: 17/17
+- parity mismatch ids: none
+- both model+service 100%: NO
+- efficiency comparison eligible: NO
+- lower total tokens: gpt_5_4_mini_test
+- lower uncached prompt tokens: gpt_5_6_luna_test
+- lower completion+reasoning tokens: gpt_5_4_mini_test
+- lower average latency: gpt_5_4_mini_test
+- lower p95 latency: gpt_5_4_mini_test
+- operational efficiency lead: DEFER
+
+[Decision rule]
+- 품질/서비스가 동일하지 않으면 효율 비교로 모델을 선택하지 않음.
+- 두 모델 모두 model+service 100%이고 critical output parity 100%일 때만 토큰/지연시간 비교.
+- total token과 avg latency가 같은 모델에서 모두 낮으면 해당 모델을 efficiency lead로 표시.
+- 오답 후 재시도 토큰/시간은 절감으로 인정하지 않음. 이 benchmark는 SDK retry=0, fallback 없음.
+- 실제 비용은 provider의 cached/uncached 과금 정책을 별도로 적용해야 하므로 여기서는 추정하지 않음.

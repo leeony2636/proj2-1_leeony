@@ -1,0 +1,57 @@
+방탈출 Agent 벤치마크 전체 진행 요약
+========================================================================
+
+※ 과거 버전은 평가계약이 달라 절대점수 직접비교보다 개선 흐름 확인용입니다.
+
+[20260920_175032] 초기 API/계약 확인
+  gpt_5_4_mini_test | calls=1 | OK=1/1 | pass=N/A | route=N/A | skill=N/A | tool=0/1 | total_tokens=1227 | avg/call=1227.0
+  gpt_5_6_luna_test | calls=1 | OK=0/1 | pass=N/A | route=N/A | skill=N/A | tool=N/A | total_tokens=N/A | avg/call=N/A
+
+[20260920_175447] 초기 1문항 구조화 평가
+  gpt_5_4_mini_test | calls=1 | OK=1/1 | pass=N/A | route=N/A | skill=N/A | tool=0/1 | total_tokens=1225 | avg/call=1225.0
+  gpt_5_6_luna_test | calls=1 | OK=1/1 | pass=N/A | route=N/A | skill=N/A | tool=0/1 | total_tokens=1353 | avg/call=1353.0
+
+[20260920_180903] 계약 보완 확인
+  gpt_5_4_mini_test | calls=1 | OK=0/1 | pass=N/A | route=N/A | skill=N/A | tool=0/1 | total_tokens=1649 | avg/call=1649.0
+  gpt_5_6_luna_test | calls=1 | OK=0/1 | pass=N/A | route=N/A | skill=N/A | tool=N/A | total_tokens=1959 | avg/call=1959.0
+
+[20260920_181443] 1문항 모델 선택 기준 확인
+  gpt_5_4_mini_test | calls=1 | OK=1/1 | pass=N/A | route=N/A | skill=N/A | tool=0/1 | total_tokens=906 | avg/call=906.0
+  gpt_5_6_luna_test | calls=1 | OK=1/1 | pass=N/A | route=N/A | skill=N/A | tool=1/1 | total_tokens=1242 | avg/call=1242.0
+
+[20260920_182325] v4 최소 프롬프트 1문항
+  gpt_5_4_mini_test | calls=1 | OK=1/1 | strict_pass=0/1 | route=N/A | skill=N/A | tool=0/1 | total_tokens=532 | avg/call=532.0
+  gpt_5_6_luna_test | calls=1 | OK=1/1 | strict_pass=0/1 | route=N/A | skill=N/A | tool=0/1 | total_tokens=658 | avg/call=658.0
+
+[20260920_182844] v4 10문항 비교
+  gpt_5_4_mini_test | calls=10 | OK=10/10 | strict_pass=2/10 | route=N/A | skill=N/A | tool=5/10 | total_tokens=5843 | avg/call=584.3
+  gpt_5_6_luna_test | calls=10 | OK=10/10 | strict_pass=2/10 | route=N/A | skill=N/A | tool=8/10 | total_tokens=6806 | avg/call=680.6
+
+[20260920_184753] Project Grounded 계약 오류 진단
+  gpt_5_4_mini_test | calls=15 | OK=0/15 | project_pass=0/15 | route=12/15 | skill=6/15 | tool=2/15 | total_tokens=49717 | avg/call=3314.47
+  gpt_5_6_luna_test | calls=3 | OK=0/3 | project_pass=0/3 | route=3/3 | skill=3/3 | tool=0/3 | total_tokens=10695 | avg/call=3565.0
+
+[20260920_185436] v4.2.2 5문항 Skill/Tool 평가
+  gpt_5_4_mini_test | calls=5 | OK=5/5 | project_pass=1/5 | route=5/5 | skill=2/5 | tool=1/5 | total_tokens=17013 | avg/call=3402.6
+  gpt_5_6_luna_test | calls=5 | OK=5/5 | project_pass=1/5 | route=5/5 | skill=2/5 | tool=1/5 | total_tokens=18178 | avg/call=3635.6
+
+[20260920_193650] v4.4 Guard/Deterministic Tool 5문항
+  gpt_5_4_mini_test | calls=5 | OK=5/5 | service_case_pass=1/5 | route=4/5 | skill=4/5 | tool=5/5 | total_tokens=5864 | avg/call=1172.8
+  gpt_5_6_luna_test | calls=5 | OK=5/5 | service_case_pass=1/5 | route=3/5 | skill=4/5 | tool=5/5 | total_tokens=6624 | avg/call=1324.8
+
+[20260920_195231] FINAL READY 5문항
+  gpt_5_4_mini_test | calls=5 | OK=5/5 | service_case_pass=3/5 | route=4/5 | skill=4/5 | tool=5/5 | total_tokens=5694 | avg/call=1138.8
+  gpt_5_6_luna_test | calls=5 | OK=5/5 | service_case_pass=4/5 | route=4/5 | skill=5/5 | tool=5/5 | total_tokens=6163 | avg/call=1232.6
+
+[현재까지의 핵심 변화]
+- 모델이 Tool을 직접 선택하던 단계에서 Tool 누락이 반복됨.
+- HardGuard + deterministic ToolPolicy 이후 최신 5문항에서 Tool 5/5 확보.
+- full SKILL.md 매호출 전송을 제거하면서 prompt 사용량을 크게 축소.
+- 최신 남은 문제는 Tool보다 route/의도 경계 판단이었음.
+- FINAL READY v2에서는 물리 이상 vs 진도 주장 경계를 compact prompt에 명시.
+- Skill rule/weak/strong은 모델 출력에서 제거하고 deterministic SkillPolicy로 이동.
+
+[앞으로 결과 폴더]
+evals/results/<평가명>/result.csv
+evals/results/<평가명>/report.txt
+동일 평가 재실행 시 이 두 파일만 갱신됩니다.

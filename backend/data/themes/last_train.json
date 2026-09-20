@@ -1,0 +1,100 @@
+{
+  "theme_id": "last_train",
+  "title": "마지막 열차",
+  "duration_minutes": 60,
+  "difficulty": "4/5",
+  "data_status": "SYNTHETIC_DEMO_DATA",
+  "puzzles": [
+    {
+      "puzzle_id": "train-p01",
+      "order": 1,
+      "title": "마지막 열차 퍼즐 1",
+      "objective": "가상 시연용 퍼즐 1의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p02",
+      "order": 2,
+      "title": "마지막 열차 퍼즐 2",
+      "objective": "가상 시연용 퍼즐 2의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p03",
+      "order": 3,
+      "title": "마지막 열차 퍼즐 3",
+      "objective": "가상 시연용 퍼즐 3의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p04",
+      "order": 4,
+      "title": "마지막 열차 퍼즐 4",
+      "objective": "가상 시연용 퍼즐 4의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p05",
+      "order": 5,
+      "title": "마지막 열차 퍼즐 5",
+      "objective": "가상 시연용 퍼즐 5의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p06",
+      "order": 6,
+      "title": "마지막 열차 퍼즐 6",
+      "objective": "가상 시연용 퍼즐 6의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p07",
+      "order": 7,
+      "title": "마지막 열차 퍼즐 7",
+      "objective": "가상 시연용 퍼즐 7의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p08",
+      "order": 8,
+      "title": "마지막 열차 퍼즐 8",
+      "objective": "가상 시연용 퍼즐 8의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p09",
+      "order": 9,
+      "title": "마지막 열차 퍼즐 9",
+      "objective": "가상 시연용 퍼즐 9의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p10",
+      "order": 10,
+      "title": "마지막 열차 퍼즐 10",
+      "objective": "가상 시연용 퍼즐 10의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p11",
+      "order": 11,
+      "title": "마지막 열차 퍼즐 11",
+      "objective": "가상 시연용 퍼즐 11의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p12",
+      "order": 12,
+      "title": "마지막 열차 퍼즐 12",
+      "objective": "가상 시연용 퍼즐 12의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    },
+    {
+      "puzzle_id": "train-p13",
+      "order": 13,
+      "title": "마지막 열차 퍼즐 13",
+      "objective": "가상 시연용 퍼즐 13의 단서를 조합해 해결한다.",
+      "status": "SYNTHETIC_DEMO_DATA"
+    }
+  ]
+}

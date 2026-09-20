@@ -1,0 +1,67 @@
+{
+  "train-p01": {
+    "answer": "DEMO_ANSWER_01",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p02": {
+    "answer": "DEMO_ANSWER_02",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p03": {
+    "answer": "DEMO_ANSWER_03",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p04": {
+    "answer": "DEMO_ANSWER_04",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p05": {
+    "answer": "DEMO_ANSWER_05",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p06": {
+    "answer": "DEMO_ANSWER_06",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p07": {
+    "answer": "DEMO_ANSWER_07",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p08": {
+    "answer": "DEMO_ANSWER_08",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p09": {
+    "answer": "DEMO_ANSWER_09",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p10": {
+    "answer": "DEMO_ANSWER_10",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p11": {
+    "answer": "DEMO_ANSWER_11",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p12": {
+    "answer": "DEMO_ANSWER_12",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "train-p13": {
+    "answer": "DEMO_ANSWER_13",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  }
+}

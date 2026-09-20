@@ -1,0 +1,62 @@
+{
+  "lab-p01": {
+    "answer": "DEMO_ANSWER_01",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p02": {
+    "answer": "DEMO_ANSWER_02",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p03": {
+    "answer": "DEMO_ANSWER_03",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p04": {
+    "answer": "DEMO_ANSWER_04",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p05": {
+    "answer": "DEMO_ANSWER_05",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p06": {
+    "answer": "DEMO_ANSWER_06",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p07": {
+    "answer": "DEMO_ANSWER_07",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p08": {
+    "answer": "DEMO_ANSWER_08",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p09": {
+    "answer": "DEMO_ANSWER_09",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p10": {
+    "answer": "DEMO_ANSWER_10",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p11": {
+    "answer": "DEMO_ANSWER_11",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  },
+  "lab-p12": {
+    "answer": "DEMO_ANSWER_12",
+    "status": "SYNTHETIC_ANSWERVAULT",
+    "reveal_policy": "NOT_EXPOSED_TO_AGENT"
+  }
+}

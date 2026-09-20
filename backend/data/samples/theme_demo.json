@@ -1,0 +1,44 @@
+{
+  "status": "DRAFT_SAMPLE_NOT_FINAL_THEME",
+  "theme_id": "theme_demo",
+  "title": "가상 테마 샘플",
+  "duration_minutes": 60,
+  "puzzles": [
+    {
+      "puzzle_id": "p01",
+      "order": 1,
+      "title": "샘플 퍼즐 1",
+      "objective": "TODO_DOMAIN_CONTENT"
+    },
+    {
+      "puzzle_id": "p02",
+      "order": 2,
+      "title": "샘플 퍼즐 2",
+      "objective": "TODO_DOMAIN_CONTENT"
+    },
+    {
+      "puzzle_id": "p03",
+      "order": 3,
+      "title": "샘플 퍼즐 3",
+      "objective": "TODO_DOMAIN_CONTENT"
+    },
+    {
+      "puzzle_id": "p04",
+      "order": 4,
+      "title": "샘플 퍼즐 4",
+      "objective": "TODO_DOMAIN_CONTENT"
+    },
+    {
+      "puzzle_id": "p05",
+      "order": 5,
+      "title": "샘플 퍼즐 5",
+      "objective": "TODO_DOMAIN_CONTENT"
+    },
+    {
+      "puzzle_id": "p06",
+      "order": 6,
+      "title": "샘플 퍼즐 6",
+      "objective": "TODO_DOMAIN_CONTENT"
+    }
+  ]
+}
