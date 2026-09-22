@@ -9,6 +9,44 @@
 | 프로젝트 | 방탈출 도우미 Agent|
 | 조 | 1조 |
 
+## 방탈출 카페 운영 보조 Agent
+
+방탈출 카페에서 발생하는 고객 요청, 힌트 제공, 장비 이상, 게임마스터 호출과 운영 기록을 자연어 기반으로 연결하고, 세션 상태와 운영 정책에 따라 안전하게 처리하는 운영 보조 Agent입니다.
+
+기준 기획안은 [docs/01-operations-agent-problem-definition.md](./docs/01-operations-agent-problem-definition.md)입니다.
+
+### 현재 MVP 처리 흐름
+
+- 고객은 텍스트를 입력하거나 음성 요청 버튼으로 요청을 제출합니다. 상시 마이크 청취는 하지 않습니다.
+- STT는 음성을 텍스트로 바꾸는 입력 Adapter입니다. 현재 서비스 구현은 `MockSTTAdapter`이며, 실험상 선택된 `openai/whisper-large-v3-turbo + Escape-room Adapter / Epoch 2`는 아직 실제 Provider로 연결되지 않았습니다.
+- LLM/baseline은 요청의 의도·감정·추가정보 필요 여부를 구조화합니다. 힌트 강도·진도·정답 공개·운영 요청 상태를 최종 결정하지 않습니다.
+- 코드가 세션·팀·현재 퍼즐·남은 시간·진도·ANSWER 동의를 검증하고 `WEAK`/`STRONG` 정책을 결정합니다.
+- MCP/LocalRuntime은 승인 힌트·이력·게임마스터 요청을 조회하거나 기록합니다.
+- 장비 이상과 게임마스터 직접 호출은 일반 힌트 경로와 분리해 운영 요청 큐로 보냅니다.
+- 게임마스터 요청 상태는 `OPEN → ACKNOWLEDGED → RESOLVED`를 기본 처리 흐름으로 사용하며, 처리 취소가 필요한 경우 `CANCELED`로 종료할 수 있습니다.
+
+### MVP에서 의도적으로 하지 않는 것
+
+- RAG, LangGraph
+- LLM의 자유로운 힌트·정답 생성
+- 고객 Agent의 진도 직접 변경
+- LLM의 직접 타이머·장비 제어
+- QR 입장, 예약·결제·환불, CRM, 다중 매장 권한 관리
+- CCTV·상시 음성 청취·자동 선제 힌트
+
+현재 `mark_puzzle_solved` Runtime 기능은 내부 테스트/후속 게임 이벤트를 위해 남아 있지만 고객 Agent용 HTTP/MCP 경로에는 공개하지 않습니다. QR 관련 서비스 파일도 후속 확장 참고용일 뿐 현재 API에는 연결하지 않습니다.
+
+### 아직 구현하지 않은 기획 항목
+
+- `GENERAL_INQUIRY`의 최종 응답 계약
+- 승인 결과를 LLM이 사용자 친화적 문장으로 다시 표현하는 별도 응답 생성 단계
+- 장비 이상 전용 이력 저장소
+- 실제 세션 데이터를 이용한 다중 방 운영 현황/우선순위 자동 판정
+- 게임 종료 운영 요약·테마별 통계·관리자 기능
+- 원격 `/mcp` transport와 실제 ERCC/POS/예약 Adapter
+
+이 항목들은 기획에는 존재하지만 현재 저장소에 승인된 schema·평가 기준·실데이터 계약이 없어 임의 구현하지 않습니다.
+
 ## 조원 소개 — 🏁 첫 과제
 
 **조원 각자가 자기 행을 브랜치 → PR → 리뷰 → merge로 직접 추가하세요.** (전원 필수)
@@ -20,6 +58,7 @@
 | 하주성 | @leeony2636 | 조원 | 잘 부탁드립니다. |
 | 류승민 | @padong47 | 조원 , 미정 | 부족할 수 있지만 열심히 하겠습니다. |
 | 박진형 | @jinyeong-731 | 조원, 도메인 | 잘부탁드려요. |
+| 서문유신 | @govlgh777-ui | 조원 | 잘 부탁드립니다. |
 
 ## 협업 규칙 (필독)
 
@@ -43,6 +82,14 @@ evals/            평가셋 30건 (필수 4)
 EVAL_REPORT.md    개선 전후 지표 (제출물)
 docker-compose.yml  `docker compose up` 한 줄 실행 (필수 2)
 ```
+
+음성 입력을 도입할 때도 STT 호출을 UI나 라우터에 흩뿌리지 않고 별도 Adapter로 격리합니다. STT 결과는 기존 `message` 텍스트 계약으로 들어가며, 원본 음성·전사 전문은 기본 로그와 Langfuse에 저장하지 않습니다.
+
+현재 frontend는 React + TypeScript + Vite 앱이며 `/customer`와 Escape Ops 관제 UI가 연결된 `/game-master` 경로를 제공합니다. 실행 전제와 검증 명령은 [docs/RUN_NOW.md](./docs/RUN_NOW.md)와 [docs/TESTING.md](./docs/TESTING.md)를 참고하세요.
+
+기능별 구현 기준은 [docs/guides/00-development-principles.md](./docs/guides/00-development-principles.md)에서 시작하세요. 세션, STT, 힌트 정책, 정답 동의, 게임마스터, MCP, PostgreSQL, LLM, 프론트엔드, 배포·평가 가이드가 기능별로 분리되어 있습니다.
+
+2026-09-22 기준 Foundation/D3·D4 준비 상태와 미완료 항목은 [docs/FOUNDATION_GATE_2026-09-22.md](./docs/FOUNDATION_GATE_2026-09-22.md)에서 확인합니다. 신뢰 경계는 [docs/TRUST_BOUNDARY.md](./docs/TRUST_BOUNDARY.md), 도메인 출처는 [docs/DOMAIN_SOURCE_REGISTRY.md](./docs/DOMAIN_SOURCE_REGISTRY.md)에 따로 기록합니다. **2차 프로젝트에서는 RAG와 LangGraph를 사용하지 않습니다.**
 
 **착수 후 9/23(수)까지 문제 정의와 `evals/`를 채우세요.** 추석 연휴 전에 이 둘이 있어야 연휴 동안 각자 진행할 수 있습니다.
 
@@ -77,14 +124,16 @@ git push -u origin STH001
 # 조원 리뷰 및 approve 후 merge
 ```
 
+브랜치명은 `작성자 성명 이니셜 + 생성 순번`을 사용합니다. 예를 들어 심태현의 네 번째 작업 브랜치는 `STH004`입니다. 브랜치명에 `feat/` 같은 접두사는 붙이지 않습니다.
+
 ## 충돌(conflict)이 났을 때
 
 PR 화면에 "This branch has conflicts" 가 뜨면:
 
 ```bash
 git switch main && git pull          # 최신 main 받기
-git switch feat/내브랜치
-# 브랜치 명명 규칙에 따라서 예시: switch feat/STH001
+git switch STH001
+# 현재 작업 브랜치명으로 바꿔 입력합니다. 예: git switch STH004
 git merge main                       # 충돌 발생 지점이 파일에 표시됨
 # 파일 열어 <<<<<<< ======= >>>>>>> 사이에서 남길 내용 선택 후 저장
 git add . && git commit              # 충돌 해결 커밋

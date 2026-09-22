@@ -2,7 +2,7 @@ from backend.schemas import HintDecision, HintStrength, SessionState
 
 
 STRONG_TIME_MINUTES = 15
-STRONG_SOLVED_RATIO_EXCLUSIVE = 0.50
+STRONG_REMAINING_PUZZLE_RATIO_MINIMUM = 0.50
 
 
 def decide_hint_strength(
@@ -18,7 +18,7 @@ def decide_hint_strength(
     우선순위:
     1) 정답 직접 요구 / 강한 힌트 직접 요구 -> STRONG
     2) 강한 좌절 신호 -> STRONG
-    3) 남은 시간 <= 15분 AND 해결 진도율 < 50% -> STRONG
+    3) 남은 시간 <= 15분 AND 남은 문제 비율 >= 50% -> STRONG
     4) 그 외 -> WEAK
 
     LLM은 이 함수의 최종 결과를 바꿀 수 없다.
@@ -36,7 +36,7 @@ def decide_hint_strength(
         reason_codes.append("HIGH_FRUSTRATION_STRONG")
     elif (
         remaining_time_minutes <= STRONG_TIME_MINUTES
-        and session.solved_puzzle_ratio < STRONG_SOLVED_RATIO_EXCLUSIVE
+        and session.remaining_puzzle_ratio >= STRONG_REMAINING_PUZZLE_RATIO_MINIMUM
     ):
         strength = HintStrength.STRONG
         reason_codes.append("TIME_PROGRESS_STRONG_RULE")

@@ -28,3 +28,9 @@ build/
 
 # 로그
 *.log
+
+# Codex execution-plan scratch ledger
+.superpowers/
+
+# Generated local artifacts
+output/

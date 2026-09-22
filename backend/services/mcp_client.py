@@ -1,6 +1,6 @@
 from backend.schemas import HintEvent
 from mcp_server.tools.hint_tools import get_approved_hint,get_hint_history,record_hint_delivery
-from mcp_server.tools.master_tools import get_master_requests,report_equipment_issue,request_game_master
+from mcp_server.tools.master_tools import get_master_requests,report_equipment_issue,request_game_master,update_master_request
 from mcp_server.tools.puzzle_tools import get_puzzle_context
 from mcp_server.tools.session_tools import create_game_session,get_game_session,list_themes,mark_puzzle_solved
 class MCPClient:
@@ -10,8 +10,10 @@ class MCPClient:
     def solve(self,session_id,puzzle_id): return mark_puzzle_solved(session_id,puzzle_id)
     def get_puzzle(self,theme_id,puzzle_id): return get_puzzle_context(theme_id,puzzle_id)
     def get_history(self,session_id,puzzle_id): return get_hint_history(session_id,puzzle_id)
+    # STRONG도 코드 정책을 통과하면 승인 힌트를 즉시 조회한다.
     def get_hint(self,theme_id,puzzle_id,strength): return get_approved_hint(theme_id,puzzle_id,strength)
-    def record_hint(self,event:HintEvent): return record_hint_delivery(event.session_id,event.team_id,event.puzzle_id,event.strength.value,event.delivered_at.isoformat(),event.reason_codes)
-    def call_master(self,session_id,team_id,reason): return request_game_master(session_id,team_id,reason)
-    def equipment(self,session_id,team_id,detail): return report_equipment_issue(session_id,team_id,detail)
+    def record_hint(self,event:HintEvent): return record_hint_delivery(event.session_id,event.team_id,event.puzzle_id,event.strength.value,event.delivered_at.isoformat(),event.reason_codes,event.idempotency_key)
+    def call_master(self,session_id,team_id,reason,idempotency_key=None): return request_game_master(session_id,team_id,reason,idempotency_key)
+    def equipment(self,session_id,team_id,detail,idempotency_key=None): return report_equipment_issue(session_id,team_id,detail,idempotency_key)
     def master_requests(self): return get_master_requests()
+    def update_master_request(self,request_id,status,operator_id,note="",idempotency_key=None): return update_master_request(request_id,status,operator_id,note,idempotency_key)

@@ -10,6 +10,20 @@
 
 문서에서 **MUST(반드시)**, **MUST NOT(절대 금지)**, **SHOULD(권장)**는 구현 준수 수준을 뜻한다. 아직 팀에서 확정하지 않은 값은 임의로 확정하지 않고 `팀 결정 필요`로 표시한다.
 
+> **현재 구현 정책(2026-09-22):** 일반 WEAK/STRONG 힌트는 코드 정책을 통과하면 자동 제공한다. 사용자가 **최종 정답을 직접 요구한 경우에만** `AnswerVault`가 `offer_id`를 발급하고 `POST /api/answers/confirm`으로 명시적 확인을 거친다. 이 문서의 옛 `OFFERED/ACCEPTED/DECLINED` 예시 중 현재 코드와 일치하지 않는 부분은 아래에서 별도로 표시한다.
+
+## 구현 상태와 이름 매핑
+
+이 문서는 목표 계약인 **Draft v0.1.0**이다. 현재 P0 코드와 도구명이 일부 다르므로, 구현자가 아래 매핑을 확인한 뒤 작업한다. 팀 합의가 끝나면 이 표와 실제 코드 중 하나를 canonical contract로 확정하고 버전을 올린다.
+
+| 계약 문서 이름 | 현재 P0 코드 이름 | 상태 |
+|---|---|---|
+| `get_game_session` | `get_game_session` | P0 표준 이름 |
+| `record_hint_delivery` | `record_hint_delivery` | P0 표준 이름 |
+| `request_game_master` | `request_game_master` | P0 표준 이름 |
+
+`idempotency_key` 기반 기록 계약은 현재 MCP 흐름에 사용한다. `offer_id`는 일반 STRONG에 사용하지 않고, 현재 코드에서는 **최종 정답 직접 요청의 확인 토큰**으로 `AnswerVault`에서 사용한다. `OFFERED/ACCEPTED/DECLINED → PROVIDED` 형태의 과거 초안 상태명은 현재 구현과 일치하지 않으므로 canonical contract가 아니다. 현재 MCP 연결은 별도 네트워크 transport가 아닌 로컬 함수 호출이다.
+
 ---
 
 ## 0. 한눈에 보는 결론
@@ -18,7 +32,8 @@
 
 ```text
 참가자 입력/버튼
-  → FastAPI: 요청 스키마 검증·세션 턴 관리
+  → (선택) STT Adapter: 음성 → 텍스트·신뢰도 검증
+  → FastAPI: 텍스트 요청 스키마 검증·세션 턴 관리
   → LLM: 의도·문제 지칭·명시적 감정 신호 구조화
   → MCP: 세션·진도·문제·힌트 이력·승인 힌트 조회
   → 코드: 시간·진도율·재요청·순서·오류 규칙으로 최종 상태 결정
@@ -31,7 +46,8 @@
 
 | 구성요소 | 해야 하는 일 | 하면 안 되는 일 |
 |---|---|---|
-| LLM | 발화 의도, 문제 지칭, 명시적 답답함, 모호성 추출; 승인 문구 자연화 | 힌트 강도 최종 결정, 힌트 창작, 정답 추측, 시간·진도 계산 |
+| STT | 제출된 음성을 텍스트·신뢰도로 변환 | 상시 청취, 의도·감정·힌트 강도·정답 판단 |
+| LLM | 전사 또는 텍스트의 발화 의도, 문제 지칭, 명시적 답답함, 모호성 추출; 승인 문구 자연화 | 힌트 강도 최종 결정, 힌트 창작, 정답 추측, 시간·진도 계산 |
 | 코드 | 남은 시간·진도율·재요청 시간 계산; 최종 상태·힌트 강도 결정; 예/아니오 전이 | 승인 데이터가 없을 때 임의 힌트 생성 |
 | MCP | 세션·진도·문제·이력·승인 힌트 조회; 이벤트·직원 호출 기록 | LLM처럼 자유 생성, 강도 정책의 임의 변경, 일반 출력으로 정답 반환 |
 | Skill | 판단 원칙, 오버라이드, 스포일러 금지, 확인 질문, 직원 호출 기준 | 세션의 실시간 상태를 사실처럼 생성 |
@@ -42,12 +58,12 @@
 
 | 도구 | 성격 | 핵심 목적 |
 |---|---|---|
-| `get_session_state` | 조회 | 세션 상태, 남은 시간, 진도, 강한 힌트 제안 상태 확인 |
+| `get_game_session` | 조회 | 세션 상태, 남은 시간, 진도, 현재 문제 확인 |
 | `get_puzzle_context` | 조회 | 현재/요청 문제의 순서 접근 가능 여부와 비정답 메타데이터 확인 |
 | `get_hint_history` | 조회 | 같은 문제의 최근 힌트 요청·제안·거절·제공 이력 확인 |
 | `get_approved_hint` | 조회 | 도메인 담당자가 승인한 약한/강한 힌트 한 건만 조회 |
-| `record_hint_event` | 기록 | 요청, 제안, 수락, 거절, 제공, 실패 이벤트 기록 |
-| `create_master_request` | 기록 | 소품 이상·세팅 오류·직접 호출·비정상 상황을 직원에게 전달 |
+| `record_hint_delivery` | 기록 | 힌트 요청·제공·실패 이력 기록 |
+| `request_game_master` | 기록 | 소품 이상·세팅 오류·직접 호출·비정상 상황을 직원에게 전달 |
 
 `update_progress`는 참가자용 Agent에 바로 노출하지 않는다. 진도 갱신 주체가 확정되기 전까지 게임마스터 UI 또는 별도 내부 API의 책임으로 둔다.
 
@@ -60,14 +76,14 @@
 - **주 사용자**: 방탈출에 참여 중인 고객
 - **보조 사용자**: 게임 세션을 시작하고 비정상 상황을 처리하는 게임마스터
 - **상황**: 고객은 친구들과 문제를 풀고 있으므로 Agent와 긴 대화를 할 여유가 없다.
-- **요청 방식**: 고객이 짧은 자연어 또는 버튼으로 요청을 시작한다. Agent가 항상 주변 음성을 듣는 구조는 MVP 범위가 아니다.
+- **요청 방식**: 고객이 짧은 텍스트 또는 음성 제출 버튼으로 요청을 시작한다. Agent가 항상 주변 음성을 듣는 구조는 MVP 범위가 아니다.
 
 ### 1.2 해결하려는 문제
 
 1. LLM이 자유롭게 힌트를 만들면 정답이나 다음 문제의 정보가 섞일 수 있다.
 2. 남은 시간, 진도, 과거 힌트 이력이 서로 다른 저장소에 있으면 판정이 일관되지 않는다.
 3. 같은 요청을 재시도할 때 기록이 중복되면 재요청 판정과 평가 결과가 왜곡된다.
-4. 강한 힌트는 사용자 동의를 거쳐야 하지만, 단순 프롬프트 규칙만으로는 동의 절차를 강제하기 어렵다.
+4. STRONG은 코드 정책을 통과하면 자동 제공하고, ANSWER만 별도 동의 절차를 거치도록 분리한다.
 5. MCP 조회 실패 시 LLM이 빈칸을 추측하면 승인되지 않은 힌트가 노출된다.
 6. FastAPI, MCP, 평가 코드가 서로 다른 필드명과 상태명을 사용하면 통합 단계에서 오류가 발생한다.
 
@@ -75,7 +91,7 @@
 
 - 승인된 힌트만 식별자와 버전이 있는 데이터로 반환한다.
 - 현재 문제보다 뒤의 문제는 MCP 단계에서도 차단한다.
-- 강한 힌트 수락 여부를 서버 상태로 검증한다.
+- STRONG은 코드 정책을 통과하면 자동 제공하고, ANSWER 동의 토큰만 서버 상태로 검증한다.
 - 모든 쓰기에 멱등성 키를 사용해 중복 기록을 방지한다.
 - 같은 오류를 공통 오류 코드로 반환해 FastAPI가 안전한 사용자 메시지로 변환할 수 있다.
 - Langfuse 평가에서 `request_id`, `reason_codes`, `data_version`을 기준으로 판정을 재현할 수 있다.
@@ -86,7 +102,7 @@
 |---|---|---|---|
 | 승인되지 않은 힌트 생성 | `get_approved_hint`만 콘텐츠 공급 | 출력 스키마·힌트 ID 검증 | `ERROR`, 임의 생성 금지 |
 | 미래 문제 스포일러 | 문제 순서 접근 검사 | 코드에서 현재 순서 재검사 | 현재 문제로 안내 |
-| 강한 힌트 무동의 제공 | 수락된 `offer_id` 요구 | 상태 전이 검증 | `STRONG_CONFIRMATION_REQUIRED` |
+| STRONG 정책 우회 제공 | 코드 정책과 승인 힌트 조회 | 응답 강도·힌트 ID 검증 | `ERROR`, 임의 생성 금지 |
 | 같은 요청 중복 기록 | `idempotency_key` UNIQUE | 트랜잭션 | 기존 결과 재반환 |
 | 세션 만료 후 힌트 | 세션 상태 검사 | FastAPI 상태 검사 | `CLOSED` |
 | 소품 오류를 퍼즐 힌트로 오판 | 의도 분류 후 직원 호출 도구 | reason code 평가 | `MASTER_REQUEST` |
@@ -100,7 +116,7 @@
 
 1. 활성 세션의 남은 시간, 진도율, 현재 문제를 일관된 스키마로 반환한다.
 2. 현재 문제에 대해 승인된 약한 또는 강한 힌트만 반환한다.
-3. 강한 힌트는 사용자가 수락한 유효한 제안이 있을 때만 조회할 수 있다.
+3. WEAK와 STRONG은 코드 정책을 통과하면 승인 힌트를 자동 조회·제공한다. 사용자가 최종 정답을 직접 요구한 경우에는 `AnswerVault`가 확인 토큰을 발급하고 `/api/answers/confirm`에서 세션·팀·퍼즐·토큰을 검증한 뒤 제공한다.
 4. 힌트 요청부터 제공·거절·실패까지의 이력을 시간순으로 저장한다.
 5. 소품 이상과 직접 직원 호출을 힌트 이력과 분리해 기록한다.
 6. 읽기 실패나 데이터 누락 시 추측 가능한 텍스트 대신 구조화된 오류를 반환한다.
@@ -113,7 +129,7 @@
 | MCP 성공 응답 스키마 통과율 | 100% | Pydantic 계약 테스트 |
 | 승인되지 않은 힌트 출력률 | 0% | `hint_id`·카탈로그 대조 평가 |
 | 미래 문제 정보 노출률 | 0% | 순서 역전 실패 유도 테스트 |
-| 강한 힌트 무동의 제공률 | 0% | `offer_id` 상태 전이 테스트 |
+| STRONG 승인 콘텐츠 외 제공률 | 0% | 코드 정책·힌트 ID 대조 테스트 |
 | 쓰기 중복 생성률 | 0% | 동일 멱등성 키 재호출 테스트 |
 | 데이터 조회 실패 시 임의 생성률 | 0% | 장애 주입 평가 |
 | 직원 호출 분기 정확도 | 평가셋 기준 기록 | Langfuse score |
@@ -124,6 +140,7 @@
 ### 2.3 Out of Scope
 
 - 실제 영업 중인 방탈출 테마의 문제·정답·장치 데이터 수집
+- 상시 마이크 청취, 음성으로 먼저 개입하는 기능, STT 원본 음성 보관
 - 참가자 주변 음성을 상시 청취해 Agent가 먼저 개입하는 기능
 - LLM이 승인 힌트를 처음부터 자유 생성하는 기능
 - 결제, 예약, 회원가입, 매장 운영 전체 시스템
@@ -132,7 +149,7 @@
 - 직원용 전체 정답 열람 기능
 - 연령대별 힌트 규칙의 최종 적용
 - 참가자 Agent가 임의로 진도를 변경하는 기능
-- 실제 최종 정답 제공 API: 별도 확인 액션과 정책이 확정되기 전에는 구현하지 않음
+- ANSWER 자동 제공: MVP에서 비활성. 고객 동의 토큰을 통한 명시적 확인 API만 허용
 
 ---
 
@@ -145,8 +162,8 @@
 | 힌트 단계 | `WEAK`, `STRONG` 두 단계 |
 | 약한 힌트 | 위치·방향만 안내, 풀이 과정·정답 금지 |
 | 강한 힌트 | 풀이 방법을 구체적으로 설명, 최종 정답 금지 |
-| 강한 힌트 절차 | 짧게 제안한 뒤 예/아니오 확인을 거쳐 제공 |
-| 기본 규칙 | 남은 시간 15분 미만 **AND** 진도율 50% 미만이면 강한 힌트 후보, 그 외 약한 힌트 기본 |
+| 강한 힌트 절차 | 코드 정책을 통과하면 자동 제공 |
+| 기본 규칙 | 남은 시간 15분 이하 **AND** 남은 문제 비율 50% 이상이면 강한 힌트 후보, 그 외 약한 힌트 기본 |
 | 오버라이드 | 명확한 답답함 또는 같은 문제의 짧은 시간 내 재요청이면 강한 힌트 후보 |
 | 애매한 감정 | 감정만으로 강한 힌트를 결정하지 않음 |
 | 문제 순서 | 아직 순서가 되지 않은 문제는 힌트 금지 |
@@ -159,13 +176,13 @@
 | 결정 항목 | 권장 초안 | 영향 | 확정 담당/시점 |
 |---|---|---|---|
 | 현재 문제·진도 갱신 주체 | 게임마스터 UI 또는 내부 API | 순서 차단의 신뢰성 | 팀 / 구현 전 |
-| 빠른 재요청 기준 | 우선 120초를 설정값으로 두고 평가 후 조정 | 강한 힌트 승격 빈도 | 도메인+평가 |
-| 강한 힌트 제안 유효시간 | 우선 5분, 설정값으로 관리 | 늦은 수락 처리 | 도메인+백엔드 |
+| 빠른 재요청 기준 | `evals/dataset.jsonl`은 60초 이내를 기준으로 서술하지만 기존 문서 초안에는 120초가 남아 있어 현재 충돌 상태 | 강한 힌트 승격 빈도 | 팀 확정 필요 |
+| ANSWER 동의 토큰 유효시간 | **현재 코드 `_OFFER_TTL`은 10분**이고, 기존 문서 초안에는 5분이 남아 있어 정책값은 미확정 | 늦은 정답 확인 처리 | 팀 확정 필요 |
 | 거절 후 재제안 억제시간 | 우선 5분 또는 문제 변경 전까지 | 반복 제안 UX | 도메인+평가 |
-| 런타임 저장소 | Repository 추상화 후 개발은 메모리/SQLite, 배포는 Postgres 권장 | Docker·동시성·복구 | MCP+백엔드 |
+| 런타임 저장소 | P0 메모리 멱등성, 후속 PostgreSQL Repository | 서버 재시작·다중 인스턴스·복구 | MCP+백엔드 |
 | 두 번째 테마 범위 | 카탈로그 스키마는 지원, 전체 데이터 입력은 별도 결정 | 작업량 | 팀 |
 | 세션 인증 방식 | `session_id` 외 서명 토큰 추가 권장 | 타 세션 조회 방지 | 백엔드 |
-| 최종 정답 확인 액션 | 별도 Spec으로 분리 | 스포일러·상태 전이 | 팀 |
+| 최종 정답 확인 액션 | `POST /api/answers/confirm` | 동의 토큰·스포일러·상태 전이 | FastAPI/AnswerVault |
 
 미확정 숫자는 코드 상수가 아니라 환경 변수 또는 설정 객체로 관리한다.
 
@@ -188,14 +205,14 @@
 | 개체 | 형식 예시 | 생성 주체 |
 |---|---|---|
 | 요청 | `req_01K5...` | FastAPI, 사용자 턴마다 1개 |
-| 멱등성 키 | `req_...:OFFERED:puz_005` | 호출 조정 코드 |
+| 멱등성 키 | `req_...:PROVIDED:puz_005` | 호출 조정 코드 |
 | 세션 | `ses_01K5...` | 세션 시작 시스템 |
 | 테마 | `thm_professor_lab` | 도메인 카탈로그 |
 | 문제 | `puz_professor_lab_005` | 도메인 카탈로그 |
 | 장치 | `dev_professor_lab_lock_02` | 도메인 카탈로그 |
 | 승인 힌트 | `hnt_professor_lab_005_weak_v1` | 도메인 카탈로그 |
 | 힌트 이벤트 | `hev_01K5...` | MCP 서버 |
-| 강한 힌트 제안 | `off_01K5...` | MCP 서버 |
+| ANSWER 동의 토큰 | `aof_01K5...` | AnswerVault |
 | 직원 호출 | `msr_01K5...` | MCP 서버 |
 
 ### 4.3 공통 성공 응답
@@ -248,34 +265,40 @@
 SessionStatus       = ACTIVE | CLOSED | EXPIRED
 PuzzleAccess        = CURRENT | PAST_SOLVED | DENIED_FUTURE | UNKNOWN
 HintStrength        = WEAK | STRONG
-HintEventType       = REQUESTED | OFFERED | ACCEPTED | DECLINED | PROVIDED | FAILED
-OfferStatus         = PENDING | ACCEPTED | DECLINED | EXPIRED | CONSUMED
+HintEventType       = REQUESTED | PROVIDED | FAILED
+AnswerOfferStatus   = PENDING | CONSUMED | EXPIRED
 MasterRequestReason = PROP_ERROR | SETUP_ERROR | DIRECT_REQUEST | ABNORMAL_STATE | UNKNOWN
-MasterRequestStatus = PENDING | ACKNOWLEDGED | RESOLVED | CANCELED
-ResponseStatus      = NEED_MORE_INFO | PROVIDE_HINT | OFFER_STRONG_HINT |
-                      PROVIDE_STRONG_HINT | MASTER_REQUEST | CLOSED | ERROR
+MasterRequestStatus = OPEN | ACKNOWLEDGED | RESOLVED | CANCELED
+ResponseStatus      = NEED_MORE_INFO | PROVIDE_HINT | ANSWER_CONFIRMATION_REQUIRED |
+                      MASTER_REQUEST | CLOSED | ERROR
 ```
+
+실패 상태 매핑은 다음과 같이 고정한다.
+
+| 상황 | 외부 상태 | `reason_codes` 예시 | 임의 힌트 생성 |
+|---|---|---|---|
+| 문제·현재 퍼즐 정보 부족 | `NEED_MORE_INFO` | `AMBIGUOUS_REQUEST`, `CURRENT_PUZZLE_REQUIRED` | 금지 |
+| 현재 범위 밖·미래 퍼즐·지원하지 않는 요청 | `MASTER_REQUEST` 또는 `NEED_MORE_INFO` | `FUTURE_PUZZLE_BLOCKED`, `OUT_OF_SCOPE_REQUEST` | 금지 |
+| MCP·승인 데이터 조회 실패 | `MASTER_REQUEST` 또는 `ERROR` | `APPROVED_HINT_DATA_MISSING`, `APPROVED_HINT_LOOKUP_FAILED` | 금지 |
+
+`MASTER_REQUEST`는 운영자가 확인해야 하는 데이터·장비·진행 문제에 사용하고,
+`ERROR`는 재시도 가능한 도구 장애처럼 즉시 운영 요청으로 전환하지 않는 경우에만 사용한다.
 
 ### 4.6 판정 이유 코드
 
 `reason_codes`는 사람이 읽는 설명 대신 평가 가능한 고정 문자열 배열이다. 여러 이유가 동시에 적용될 수 있다.
 
-| 코드 | 의미 |
-|---|---|
-| `BASE_WEAK` | 기본 규칙에 따라 약한 힌트 |
-| `TIME_PROGRESS_STRONG` | 15분 미만이며 진도율 50% 미만 |
-| `EXPLICIT_FRUSTRATION` | 명확한 답답함 표현 감지 |
-| `QUICK_REREQUEST` | 같은 문제에 약한 힌트 후 짧은 시간 내 재요청 |
-| `USER_REQUESTED_WEAK` | 사용자가 위치·방향만 명시적으로 요청 |
-| `DEVICE_USAGE_ONLY` | 퍼즐 풀이가 아닌 장비 사용법 요청 |
-| `AMBIGUOUS_REQUEST` | 문제나 요청이 불명확함 |
-| `FUTURE_PUZZLE_BLOCKED` | 현재 순서보다 뒤의 문제 요청 차단 |
-| `PROP_OR_SETUP_ERROR` | 소품·세팅 이상 |
-| `DIRECT_MASTER_REQUEST` | 사용자가 직원을 직접 요청 |
-| `STRONG_HINT_ACCEPTED` | 강한 힌트 제안 수락 |
-| `STRONG_HINT_DECLINED` | 강한 힌트 제안 거절 |
-| `APPROVED_HINT_LOOKUP_FAILED` | 승인 힌트 조회 실패 |
-| `SESSION_NOT_ACTIVE` | 종료·만료 세션 |
+현재 저장소에는 **세 위치의 reason code 명칭이 서로 다르다.** 이 상태에서 한 목록을 임의로 표준화하면 기존 평가 결과와 코드 계약이 깨질 수 있으므로, D4에서 canonical 명칭을 팀이 확정하기 전까지 아래처럼 출처별로 기록한다.
+
+| 출처 | 현재 확인된 예시 | 상태 |
+|---|---|---|
+| `backend/services/hint_decision.py` | `DEFAULT_WEAK_RULE`, `TIME_PROGRESS_STRONG_RULE`, `DIRECT_ANSWER_REQUEST_STRONG`, `DIRECT_STRONG_HINT_REQUEST`, `HIGH_FRUSTRATION_STRONG` | 현재 실행 코드 |
+| `evals/dataset.jsonl` | `BASE_RULE_DEFAULT`, `BASE_RULE_TIME_AND_PROGRESS`, `ANSWER_REQUEST`, `EMOTION_OVERRIDE`, `RE_REQUEST_OVERRIDE` | 현재 평가 정답 데이터 |
+| 이 문서의 기존 Draft | `BASE_WEAK`, `TIME_PROGRESS_STRONG`, `EXPLICIT_FRUSTRATION`, `QUICK_REREQUEST` 등 | 과거 계약 초안 |
+
+기본 시간·진도 규칙의 의미는 **남은 시간 15분 이하 AND 남은 문제 비율 50% 이상**이다. 정확히 50%도 STRONG 후보에 포함한다.
+
+`FUTURE_PUZZLE_BLOCKED`, `PROP_OR_SETUP_ERROR`, `DIRECT_MASTER_REQUEST`, `APPROVED_HINT_LOOKUP_FAILED`, `SESSION_NOT_ACTIVE` 등 다른 흐름의 코드도 실제 실행 코드·평가셋과 대조해 canonical 목록을 확정해야 한다. 확정 전에는 이름을 새로 만들거나 일괄 치환하지 않는다.
 
 ---
 
@@ -377,34 +400,33 @@ progress_ratio     = solved_count / total_puzzles
 | `response_status` | enum | Y | 외부 응답 상태 |
 | `reason_codes` | string[] | Y | 판정 근거 코드 |
 | `hint_id` | string/null | N | 실제 승인 힌트 제공 시 필수 |
-| `offer_id` | string/null | N | 강한 힌트 제안 흐름에서 사용 |
+| `offer_id` | string/null | N | ANSWER 동의 토큰에서만 사용; STRONG에는 사용하지 않음 |
 | `occurred_at` | datetime | Y | 서버 생성 |
 
 사용자의 전체 발화 원문은 기본적으로 HintEvent에 저장하지 않는다. 평가에 필요하면 비식별 샘플 ID 또는 해시만 별도 저장한다.
 
-### 5.7 StrongHintOffer
+### 5.7 AnswerConsentToken
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---:|---|
-| `offer_id` | string | Y | 제안 ID |
+| `offer_id` | string | Y | ANSWER 동의 토큰 |
 | `session_id` | string | Y | 세션 참조 |
 | `puzzle_id` | string | Y | 문제 참조 |
 | `status` | enum | Y | PENDING~CONSUMED |
-| `reason_codes` | string[] | Y | 제안 이유 |
-| `offered_at` | datetime | Y | 제안 시각 |
-| `expires_at` | datetime | Y | 수락 가능 기한 |
-| `resolved_at` | datetime/null | N | 수락·거절 시각 |
-| `consumed_at` | datetime/null | N | 강한 힌트 제공 완료 시각 |
+| `reason_codes` | string[] | Y | 정답 확인 사유 |
+| `offered_at` | datetime | Y | 동의 요청 시각 |
+| `expires_at` | datetime | Y | 확인 가능 기한 |
+| `resolved_at` | datetime/null | N | 확인·만료 시각 |
+| `consumed_at` | datetime/null | N | 정답 공개 완료 시각 |
 
 허용 상태 전이:
 
 ```text
-PENDING → ACCEPTED → CONSUMED
-PENDING → DECLINED
+PENDING → CONSUMED
 PENDING → EXPIRED
 ```
 
-그 외 전이는 오류다. `DECLINED`, `EXPIRED`, `CONSUMED` 상태는 다시 `ACCEPTED`로 바꿀 수 없다.
+그 외 전이는 오류다. `EXPIRED`, `CONSUMED` 상태는 다시 `PENDING`으로 바꿀 수 없다.
 
 ### 5.8 MasterRequest
 
@@ -417,7 +439,7 @@ PENDING → EXPIRED
 | `puzzle_id` | string/null | N | 관련 문제가 있으면 기록 |
 | `reason` | enum | Y | 호출 사유 |
 | `summary` | string | Y | 정답 없는 짧은 상황 요약 |
-| `status` | enum | Y | 기본 `PENDING` |
+| `status` | enum | Y | 기본 `OPEN` |
 | `created_at` | datetime | Y | 서버 생성 |
 | `acknowledged_at` | datetime/null | N | 직원 확인 시각 |
 | `resolved_at` | datetime/null | N | 처리 완료 시각 |
@@ -428,11 +450,11 @@ PENDING → EXPIRED
 
 모든 도구는 Pydantic 입력·출력 모델을 사용한다. 입력 검증 실패는 도구 본문 실행 전에 거부한다. 도구 설명에는 **언제 호출할지**, **언제 호출하지 않을지**, **부작용**을 명시한다.
 
-### 6.1 `get_session_state`
+### 6.1 `get_game_session`
 
 #### 목적
 
-세션 활성 여부, 서버 기준 남은 시간, 현재 진도, 현재 문제, 강한 힌트 제안 상태를 한 번에 조회한다. 매 사용자 턴의 첫 MCP 조회로 사용한다.
+세션 활성 여부, 서버 기준 남은 시간, 현재 진도, 현재 문제를 한 번에 조회한다. 매 사용자 턴의 첫 MCP 조회로 사용한다.
 
 #### 입력
 
@@ -549,7 +571,7 @@ PENDING → EXPIRED
 
 #### 목적
 
-같은 문제의 약한 힌트 제공 시점, 강한 힌트 제안·거절 여부, 최근 재요청 여부를 코드가 판단할 수 있게 한다.
+같은 문제의 WEAK/STRONG 제공 시점과 최근 재요청 여부를 코드가 판단할 수 있게 한다.
 
 #### 입력
 
@@ -646,94 +668,87 @@ PENDING → EXPIRED
 1. 세션이 `ACTIVE`인지 확인한다.
 2. `puzzle_id`가 세션의 현재 문제인지 확인한다.
 3. 요청 강도가 `WEAK` 또는 `STRONG`인지 확인한다.
-4. `STRONG`이면 동일 세션·동일 문제의 `ACCEPTED` 상태 `offer_id`가 있는지 확인한다.
-5. 제안이 만료·거절·소비되지 않았는지 확인한다.
-6. 활성 승인 힌트를 정확히 한 건 조회한다.
-7. 응답 모델 허용 목록으로 직렬화한다.
-8. 최종 정답 문자열이 힌트 원문에 포함되지 않는지 방어 검증한다.
+4. `STRONG`도 별도 동의 없이 승인 힌트를 조회한다.
+5. 활성 승인 힌트를 정확히 한 건 조회한다.
+6. 응답 모델 허용 목록으로 직렬화한다.
+7. 최종 정답 문자열이 힌트 원문에 포함되지 않는지 방어 검증한다.
 
 #### 주요 오류
 
 - `SESSION_NOT_ACTIVE`
 - `PUZZLE_ACCESS_DENIED`
 - `APPROVED_HINT_NOT_FOUND`
-- `STRONG_CONFIRMATION_REQUIRED`
-- `OFFER_NOT_FOUND`
-- `OFFER_EXPIRED`
-- `OFFER_ALREADY_CONSUMED`
 - `SPOILER_VALIDATION_FAILED`
 
 오류가 발생하면 LLM에 대체 힌트 생성을 요청하지 않는다. 외부 상태는 `ERROR` 또는 안전한 `MASTER_REQUEST`로 전환한다.
 
 ---
 
-### 6.5 `record_hint_event`
+### 6.5 `record_hint_delivery`
+
+> **적용 범위 주의:** 일반 STRONG 자동 제공 경로는 `REQUESTED → PROVIDED`이며 `offer_id`를 요구하지 않는다. 최종 정답 직접 요청의 확인 토큰은 현재 `AnswerVault`와 `POST /api/answers/confirm`에서 별도로 구현되어 있다. 아래 `OFFERED/ACCEPTED/DECLINED` 형태의 과거 예시가 현재 AnswerVault 상태와 다르면 현재 코드 계약을 우선한다.
 
 #### 목적
 
 힌트 흐름의 상태 전이를 원자적으로 기록한다. 쓰기 도구이므로 `idempotency_key`가 필수다.
 
-#### 제안 기록 입력
-
-```json
-{
-  "request_id": "req_01K5EXAMPLE",
-  "idempotency_key": "req_01K5EXAMPLE:OFFERED:puz_professor_lab_005",
-  "session_id": "ses_01K5SESSION",
-  "puzzle_id": "puz_professor_lab_005",
-  "event_type": "OFFERED",
-  "hint_strength": "STRONG",
-  "response_status": "OFFER_STRONG_HINT",
-  "reason_codes": ["TIME_PROGRESS_STRONG"],
-  "hint_id": null,
-  "offer_id": null
-}
-```
-
-#### 제안 기록 성공 `data`
-
-```json
-{
-  "event_id": "hev_01K5OFFERED",
-  "offer": {
-    "offer_id": "off_01K5OFFER",
-    "status": "PENDING",
-    "expires_at": "2026-09-18T06:35:00Z"
-  }
-}
-```
-
-#### 수락 기록 입력
-
-```json
-{
-  "request_id": "req_01K5YES",
-  "idempotency_key": "req_01K5YES:ACCEPTED:puz_professor_lab_005",
-  "session_id": "ses_01K5SESSION",
-  "puzzle_id": "puz_professor_lab_005",
-  "event_type": "ACCEPTED",
-  "hint_strength": "STRONG",
-  "response_status": "PROVIDE_STRONG_HINT",
-  "reason_codes": ["STRONG_HINT_ACCEPTED"],
-  "hint_id": null,
-  "offer_id": "off_01K5OFFER"
-}
-```
-
 #### 제공 기록 입력
 
 ```json
 {
-  "request_id": "req_01K5YES",
-  "idempotency_key": "req_01K5YES:PROVIDED:puz_professor_lab_005",
+  "request_id": "req_01K5EXAMPLE",
+  "idempotency_key": "req_01K5EXAMPLE:PROVIDED:puz_professor_lab_005",
   "session_id": "ses_01K5SESSION",
   "puzzle_id": "puz_professor_lab_005",
   "event_type": "PROVIDED",
   "hint_strength": "STRONG",
-  "response_status": "PROVIDE_STRONG_HINT",
-  "reason_codes": ["STRONG_HINT_ACCEPTED"],
+  "response_status": "PROVIDE_HINT",
+  "reason_codes": ["TIME_PROGRESS_STRONG_RULE"],
   "hint_id": "hnt_professor_lab_005_strong_v1",
-  "offer_id": "off_01K5OFFER"
+  "offer_id": null
+}
+```
+
+#### 제공 기록 성공 `data`
+
+```json
+{
+  "event_id": "hev_01K5PROVIDED"
+}
+```
+
+#### ANSWER 동의 기록
+
+```json
+{
+  "request_id": "req_01K5ANSWER",
+  "idempotency_key": "req_01K5ANSWER:ANSWER_CONFIRMED:puz_professor_lab_005",
+  "session_id": "ses_01K5SESSION",
+  "puzzle_id": "puz_professor_lab_005",
+  "event_type": "ANSWER_CONFIRMED",
+  "response_status": "ANSWER_CONFIRMATION_REQUIRED",
+  "reason_codes": ["USER_EXPLICIT_CONFIRMATION"],
+  "hint_id": null,
+  "offer_id": "aof_01K5ANSWER"
+}
+```
+
+> ANSWER 확인 이벤트는 일반 `record_hint_delivery` MCP 도구가 아니라 `/api/answers/confirm`과 AnswerVault의 후속 감사 계약으로 처리한다.
+
+#### 일반 힌트 제공 기록
+
+```json
+{
+  "request_id": "req_01K5HINT",
+  "idempotency_key": "req_01K5HINT:PROVIDED:puz_professor_lab_005",
+  "session_id": "ses_01K5SESSION",
+  "puzzle_id": "puz_professor_lab_005",
+  "event_type": "PROVIDED",
+  "hint_strength": "STRONG",
+  "response_status": "PROVIDE_HINT",
+  "reason_codes": ["STRONG_AUTO_DELIVERED"],
+  "hint_id": "hnt_professor_lab_005_strong_v1",
+  "offer_id": null
 }
 ```
 
@@ -742,10 +757,7 @@ PENDING → EXPIRED
 | 이벤트 | 추가 필수 | 상태 효과 |
 |---|---|---|
 | `REQUESTED` | 문제 ID | 요청 이력만 추가 |
-| `OFFERED` | STRONG, 제안 이유 | PENDING offer 생성 |
-| `ACCEPTED` | 기존 PENDING `offer_id` | offer를 ACCEPTED로 변경 |
-| `DECLINED` | 기존 PENDING `offer_id` | offer를 DECLINED로 변경, 억제 시각 계산 |
-| `PROVIDED` | `hint_id`, 강도 | STRONG이면 offer를 CONSUMED로 변경 |
+| `PROVIDED` | `hint_id`, 강도 | 승인 힌트 제공 기록 |
 | `FAILED` | 실패 reason code | 실패 감사 이벤트 추가 |
 
 #### 멱등성·동시성
@@ -753,12 +765,11 @@ PENDING → EXPIRED
 - `(idempotency_key)`에 UNIQUE 제약을 둔다.
 - 같은 키와 같은 payload 재호출은 기존 결과와 `deduplicated=true`를 반환한다.
 - 같은 키에 다른 payload가 오면 `IDEMPOTENCY_CONFLICT`를 반환한다.
-- 이벤트와 offer 상태 변경은 한 트랜잭션에서 처리한다.
-- offer 갱신 시 행 잠금 또는 낙관적 버전 검사를 사용해 동시에 수락·거절되는 것을 막는다.
+- ANSWER 동의 토큰 상태 변경은 `/api/answers/confirm`의 별도 계약에서 처리한다.
 
 ---
 
-### 6.6 `create_master_request`
+### 6.6 `request_game_master`
 
 #### 목적
 
@@ -782,7 +793,7 @@ PENDING → EXPIRED
 ```json
 {
   "master_request_id": "msr_01K5MASTER",
-  "status": "PENDING",
+  "status": "OPEN",
   "created_at": "2026-09-18T06:30:00Z",
   "customer_message_key": "MASTER_REQUEST_RECEIVED"
 }
@@ -803,48 +814,40 @@ PENDING → EXPIRED
 ### 7.1 약한 힌트 제공
 
 ```text
-1. get_session_state
+1. get_game_session
 2. LLM 구조화 결과 확인
 3. get_puzzle_context
 4. get_hint_history
 5. 코드가 WEAK 결정
 6. get_approved_hint(WEAK)
-7. record_hint_event(PROVIDED, WEAK, hint_id)
+7. record_hint_delivery(PROVIDED, WEAK, hint_id)
 8. 승인 문구를 짧게 전달
 ```
 
-`record_hint_event`가 실패하면 사용자에게 힌트를 이미 보냈는지 여부가 불명확해진다. 권장 순서는 기록 성공 후 응답 전송이며, 전송 실패는 FastAPI 전송 로그로 별도 추적한다.
+`record_hint_delivery`가 실패하면 사용자에게 힌트를 이미 보냈는지 여부가 불명확해진다. 권장 순서는 기록 성공 후 응답 전송이며, 전송 실패는 FastAPI 전송 로그로 별도 추적한다.
 
-### 7.2 강한 힌트 제안
+### 7.2 STRONG 자동 제공
 
 ```text
 1. 상태·문제·이력 조회
 2. 코드가 STRONG 후보 결정
-3. 최근 거절 억제 여부 확인
-4. record_hint_event(OFFERED) → offer_id 생성
-5. “강한 힌트를 볼까요?” + [예] [아니오]
+3. get_approved_hint(STRONG)
+4. record_hint_delivery(PROVIDED, STRONG, hint_id)
+5. 승인된 강한 힌트 자동 전달
 ```
 
-이 단계에서는 강한 힌트 콘텐츠를 조회하지 않는 것을 권장한다.
+정답 직접 요청은 STRONG 자동 제공과 별도다. Agent가 `ANSWER_CONFIRMATION_REQUIRED`와 일회성
+`offer_id`를 반환하고, 고객이 `POST /api/answers/confirm`을 호출한 경우에만 AnswerVault가 정답을 공개한다.
 
-### 7.3 사용자가 “예” 선택
+### 7.3 ANSWER 동의
 
 ```text
-1. record_hint_event(ACCEPTED, offer_id)
-2. get_approved_hint(STRONG, offer_id)
-3. record_hint_event(PROVIDED, STRONG, hint_id, offer_id)
-4. 승인된 강한 힌트 전달
+1. Agent가 STRONG 힌트를 먼저 자동 제공
+2. ANSWER_CONFIRMATION_REQUIRED와 일회성 offer_id 발급
+3. 고객이 POST /api/answers/confirm 호출
+4. 세션·팀·퍼즐·만료·재사용 여부 검증
+5. 검증 성공 시 토큰을 소비하고 정답 반환
 ```
-
-### 7.4 사용자가 “아니오” 선택
-
-```text
-1. record_hint_event(DECLINED, offer_id)
-2. 짧게 종료: “좋아요. 더 풀어보세요.”
-3. 억제 시간 동안 같은 조건만으로 동일 제안 반복 금지
-```
-
-새로운 명시적 요청, 문제 변경, 팀이 정한 억제시간 경과 시 재판정할 수 있다.
 
 ### 7.5 미래 문제 요청
 
@@ -860,7 +863,7 @@ PENDING → EXPIRED
 
 ```text
 1. 세션 확인
-2. create_master_request
+2. request_game_master
 3. 성공했을 때만 접수 완료 응답
 4. 힌트 도구는 호출하지 않음
 ```
@@ -885,11 +888,11 @@ PENDING → EXPIRED
 | `SESSION_NOT_ACTIVE` | 409 | N | `CLOSED` |
 | `PUZZLE_NOT_FOUND` | 404 | N | `NEED_MORE_INFO` |
 | `PUZZLE_ACCESS_DENIED` | 403 | N | 현재 문제로 안내 |
-| `APPROVED_HINT_NOT_FOUND` | 404 | N | `ERROR`, 임의 생성 금지 |
-| `STRONG_CONFIRMATION_REQUIRED` | 409 | N | 제안·확인 흐름으로 복귀 |
-| `OFFER_NOT_FOUND` | 404 | N | 다시 제안 여부 재판정 |
-| `OFFER_EXPIRED` | 409 | N | 다시 제안 여부 재판정 |
-| `OFFER_ALREADY_CONSUMED` | 409 | N | 중복 제공 차단 |
+| `APPROVED_HINT_NOT_FOUND` | 404 | N | `MASTER_REQUEST`, 임의 생성 금지 |
+| `APPROVED_HINT_LOOKUP_FAILED` | 503 | Y | 1회 재시도 후 `ERROR` |
+| `ANSWER_CONFIRMATION_INVALID` | 403 | N | 정답 미공개 |
+| `ANSWER_CONFIRMATION_EXPIRED` | 403 | N | 정답 미공개 |
+| `ANSWER_CONFIRMATION_REUSED` | 403 | N | 중복 공개 차단 |
 | `IDEMPOTENCY_CONFLICT` | 409 | N | 개발 오류 기록, 처리 중단 |
 | `SPOILER_VALIDATION_FAILED` | 500 | N | 출력 차단·보안 이벤트 |
 | `DATA_INTEGRITY_ERROR` | 500 | N | 출력 차단·직원 연결 고려 |
@@ -957,8 +960,8 @@ mcp_server/
 6. 세션의 `current_puzzle_id`는 세션의 테마·버전에 속해야 한다.
 7. `solved_puzzle_ids`는 중복될 수 없고 현재 문제보다 뒤의 문제를 포함해서는 안 된다.
 8. `progress_ratio`는 저장하지 않고 조회 시 계산하는 것을 권장한다.
-9. STRONG `PROVIDED` 이벤트에는 ACCEPTED offer와 활성 STRONG hint가 모두 있어야 한다.
-10. 한 offer는 최대 한 번만 CONSUMED 될 수 있다.
+9. STRONG `PROVIDED` 이벤트에는 코드 판정과 활성 STRONG hint가 있어야 한다.
+10. ANSWER 동의 토큰은 최대 한 번만 CONSUMED 될 수 있다.
 
 ### 9.4 카탈로그 버전과 변경 절차
 
@@ -988,7 +991,7 @@ mcp_server/
 
 ```python
 @mcp.tool()
-def get_session_state(input: GetSessionStateInput) -> ToolResponse[SessionStateData]:
+def get_game_session(input: GetGameSessionInput) -> ToolResponse[SessionStateData]:
     """활성 세션의 서버 계산 상태를 조회한다. 힌트 콘텐츠는 반환하지 않는다."""
     ...
 ```
@@ -1071,7 +1074,7 @@ FastMCP 버전에 따라 제네릭 모델 직렬화가 불안정하면 도구별
 
 **AC-01 활성 세션 조회**
 GIVEN 활성 세션과 유효한 진도 데이터가 있고
-WHEN `get_session_state`를 호출하면
+WHEN `get_game_session`을 호출하면
 THEN 서버 기준 남은 시간·진도율·현재 문제가 스키마에 맞게 반환된다.
 
 **AC-02 진도율 계산**
@@ -1111,27 +1114,27 @@ THEN `approved=true`와 정확한 `hint_id`가 반환된다.
 **AC-08 승인 힌트 누락**
 GIVEN 현재 문제의 승인 약한 힌트가 없고
 WHEN WEAK 조회를 하면
-THEN `APPROVED_HINT_NOT_FOUND`이며 대체 문구를 생성하지 않는다.
+THEN `APPROVED_HINT_NOT_FOUND`를 기록하고 `MASTER_REQUEST`로 전환하며 대체 문구를 생성하지 않는다.
 
-**AC-09 무동의 강한 힌트 차단**
-GIVEN 수락된 offer가 없고
-WHEN STRONG 조회를 하면
-THEN `STRONG_CONFIRMATION_REQUIRED`이며 강한 힌트 원문은 반환되지 않는다.
+**AC-09 STRONG 자동 제공**
+GIVEN 수락된 offer가 없어도 코드 정책이 STRONG을 결정했고
+WHEN 승인 STRONG 힌트를 조회하면
+THEN 별도 동의 없이 승인된 힌트 한 건을 반환한다.
 
-**AC-10 수락 후 강한 힌트**
-GIVEN 동일 세션·문제의 유효한 offer가 ACCEPTED이고
-WHEN offer ID와 함께 STRONG 조회를 하면
-THEN 승인된 강한 힌트 한 건만 반환된다.
+**AC-10 ANSWER 동의 전 정답 차단**
+GIVEN 유효한 ANSWER 동의 토큰이 없고
+WHEN 정답 확인을 요청하면
+THEN `403`이며 정답 문자열은 반환되지 않는다.
 
-**AC-11 거절·만료 offer 차단**
-GIVEN offer가 DECLINED 또는 EXPIRED이고
-WHEN STRONG 조회를 하면
+**AC-11 ANSWER 토큰 만료 차단**
+GIVEN ANSWER 동의 토큰이 만료되었고
+WHEN 정답 확인을 요청하면
 THEN 오류를 반환하고 콘텐츠는 반환하지 않는다.
 
-**AC-12 소비된 offer 재사용 차단**
-GIVEN offer가 CONSUMED이고
-WHEN 다시 같은 offer로 STRONG 조회를 하면
-THEN `OFFER_ALREADY_CONSUMED`가 된다.
+**AC-12 ANSWER 토큰 재사용 차단**
+GIVEN ANSWER 동의 토큰이 이미 CONSUMED 상태이고
+WHEN 다시 같은 토큰으로 정답 확인을 요청하면
+THEN `403`이 되고 정답은 반환되지 않는다.
 
 ### 이력·재요청·멱등성
 
@@ -1145,15 +1148,15 @@ GIVEN 같은 문제에 약한 힌트를 이미 제공했고
 WHEN 이력을 조회하면
 THEN 마지막 약한 힌트 시각과 경과 초가 서버 기준으로 반환된다.
 
-**AC-15 제안 생성**
+**AC-15 STRONG 자동 제공**
 GIVEN 코드가 강한 힌트 후보를 결정했고
-WHEN `OFFERED` 이벤트를 기록하면
-THEN 같은 트랜잭션에서 PENDING offer가 하나 생성된다.
+WHEN 승인 힌트를 조회하면
+THEN 동의 토큰 없이 `PROVIDED` 이벤트를 기록하고 STRONG을 전달한다.
 
-**AC-16 거절 후 즉시 반복 방지**
-GIVEN 사용자가 offer를 거절했고 억제 시간이 지나지 않았고
-WHEN 다음 요청을 판정하면
-THEN 같은 이유만으로 동일 제안을 반복하지 않는다.
+**AC-16 ANSWER 동의 토큰**
+GIVEN 고객이 유효한 `offer_id`로 정답 확인을 요청했고
+WHEN `/api/answers/confirm`을 호출하면
+THEN 토큰을 한 번 소비하고 정답을 반환한다.
 
 **AC-17 동일 쓰기 재호출**
 GIVEN 이미 처리한 `idempotency_key`와 동일 payload이고
@@ -1165,17 +1168,17 @@ GIVEN 같은 `idempotency_key`에 다른 payload이고
 WHEN 쓰기 도구를 호출하면
 THEN `IDEMPOTENCY_CONFLICT`로 거부한다.
 
-**AC-19 동시 수락·거절**
-GIVEN 같은 PENDING offer에 수락과 거절 요청이 동시에 도착하고
-WHEN 트랜잭션이 처리되면
-THEN 하나만 성공하고 상태 전이가 모순되지 않는다.
+**AC-19 ANSWER 토큰 재사용**
+GIVEN 이미 소비된 ANSWER 토큰을 다시 사용하고
+WHEN `/api/answers/confirm`을 호출하면
+THEN `403`으로 거부하고 정답을 반환하지 않는다.
 
 ### 직원 호출·오류
 
 **AC-20 소품 오류 직원 호출**
 GIVEN 참가자가 소품 미작동을 명확히 보고했고
-WHEN `create_master_request`가 성공하면
-THEN PENDING 호출 한 건이 생성되고 외부 상태는 `MASTER_REQUEST`다.
+WHEN `request_game_master`가 성공하면
+THEN OPEN 호출 한 건이 생성되고 외부 상태는 `MASTER_REQUEST`다.
 
 **AC-21 직원 호출 중복 방지**
 GIVEN 네트워크 재시도로 같은 호출을 다시 전송했고
@@ -1190,7 +1193,7 @@ THEN 접수 완료라고 말하지 않고 실패 또는 대체 연락 안내를 
 **AC-23 MCP 장애 시 임의 생성 금지**
 GIVEN 승인 힌트 조회가 실패했고
 WHEN LLM 응답 단계로 이동하려 하면
-THEN 힌트 생성을 중단하고 `ERROR` 처리한다.
+THEN 힌트 생성을 중단하고, 데이터 누락은 `MASTER_REQUEST`, 일시 장애는 1회 재시도 후 `ERROR` 처리한다.
 
 ### 계약·관측
 
@@ -1217,7 +1220,7 @@ THEN `schema_version`, `data_version`, `checksum`, `eval_case_id`로 사용 데�
 
 | 계층 | 대상 | 예시 |
 |---|---|---|
-| 단위 테스트 | 계산·상태 전이·스포일러 검사 | 진도율, offer 전이, 정답 포함 탐지 |
+| 단위 테스트 | 계산·상태 전이·스포일러 검사 | 진도율, ANSWER 토큰 상태, 정답 포함 탐지 |
 | 계약 테스트 | Pydantic 입출력 | 필수 필드, enum, extra forbid, 오류 envelope |
 | 저장소 테스트 | 멱등성·트랜잭션 | 중복 쓰기, 동시 수락/거절 |
 | MCP 통합 테스트 | FastMCP 도구 호출 | 6개 도구 happy/edge/failure |
@@ -1291,7 +1294,7 @@ backend/tests/test_mcp_error_mapping.py
 - [ ] 성공·실패 envelope와 오류 코드가 FastAPI 매핑과 일치한다.
 - [ ] 승인 힌트가 없는 경우 임의 생성하지 않는다.
 - [ ] 미래 문제 요청에서 미래 문제 데이터가 한 필드도 노출되지 않는다.
-- [ ] 강한 힌트가 유효한 수락 상태 없이는 반환되지 않는다.
+- [ ] 최종 정답이 유효한 `offer_id`와 명시적 동의 없이는 반환되지 않는다.
 - [ ] 최종 정답이 모든 일반 MCP 응답과 Langfuse 로그에서 제외된다.
 - [ ] 모든 쓰기 도구가 멱등성 테스트를 통과한다.
 - [ ] offer 상태 전이와 동시성 테스트를 통과한다.
@@ -1314,7 +1317,7 @@ backend/tests/test_mcp_error_mapping.py
 ### FastAPI 담당 확인
 
 - [ ] 사용자 턴마다 `request_id`를 한 번 생성하는가?
-- [ ] 강한 힌트 예/아니오가 `offer_id`에 연결되는가?
+- [ ] ANSWER 명시적 동의가 일회성 `offer_id`에 연결되는가?
 - [ ] MCP 오류를 고객용 상태로 안전하게 매핑할 수 있는가?
 - [ ] 기록 성공 여부를 확인한 뒤 사용자에게 완료를 알리는가?
 

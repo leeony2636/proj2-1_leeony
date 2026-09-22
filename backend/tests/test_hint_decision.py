@@ -17,12 +17,13 @@ def make_session(*, solved: int, total: int = 10) -> SessionState:
     )
 
 
-def test_exact_50_percent_is_not_time_progress_strong():
+def test_exact_50_percent_remaining_is_time_progress_strong():
     result = decide_hint_strength(
         session=make_session(solved=5, total=10),
         remaining_time_minutes=15,
     )
-    assert result.strength == HintStrength.WEAK
+    assert result.strength == HintStrength.STRONG
+    assert "TIME_PROGRESS_STRONG_RULE" in result.reason_codes
 
 
 def test_strong_when_time_low_and_solved_under_50_percent():

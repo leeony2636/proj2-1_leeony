@@ -31,3 +31,23 @@ def test_answer_vault_requires_strong_hint_before_reveal():
     assert result["puzzle_id"] == puzzle_id
     assert result["policy"] == "USER_EXPLICIT_REVEAL_AFTER_STRONG"
     assert result["answer"]
+
+
+def test_answer_vault_rejects_wrong_team():
+    mcp = MCPClient()
+    session = mcp.create_session("last_train", "team-answer-owner")
+
+    with pytest.raises(ValueError, match="TEAM_SESSION_MISMATCH"):
+        reveal_answer(
+            session["session_id"],
+            "team-answer-other",
+            session["current_puzzle_id"],
+        )
+
+
+def test_answer_vault_rejects_non_current_puzzle():
+    mcp = MCPClient()
+    session = mcp.create_session("last_train", "team-answer-order")
+
+    with pytest.raises(ValueError, match="ANSWER_REVEAL_CURRENT_PUZZLE_ONLY"):
+        reveal_answer(session["session_id"], "team-answer-order", "train-p02")

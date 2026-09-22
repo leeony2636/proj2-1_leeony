@@ -5,6 +5,8 @@
 
 쓰지 않는 것은 **지워도 됩니다.** 폴더를 남겨두는 것 자체로 점수를 받지는 않습니다.
 
+> 이 문서는 처음 제공된 scaffold와 현재 프로젝트 구현을 함께 설명합니다. 아래의 “현재 구현”과 “후속 작업”을 구분해서 읽으세요.
+
 ---
 
 ## 한눈에
@@ -29,9 +31,19 @@ docker-compose.yml    `docker compose up` 한 줄  ← 필수 2
 
 ## 파일별로 무엇을 하나
 
+## 현재 구현 요약
+
+- `backend/main.py`: `/health`, 테마, 세션, Agent, 게임마스터 관련 API를 등록합니다.
+- `frontend/`: React + TypeScript + Vite 앱이며 `/customer`, `/game-master` 화면을 제공합니다.
+- `mcp_server/tools/`: FastAPI가 P0에서 로컬 함수 호출로 사용하는 실제 MCP 도구입니다.
+- `mcp_server/tools_PJH/`: 실험·참고 코드이며 운영 경로에 등록하지 않습니다.
+- `evals/dataset.jsonl`: 정상·경계·실패 유도 케이스를 포함한 30건 평가셋입니다.
+- `EVAL_REPORT.md`: 아직 실제 baseline과 개선 전후 수치를 채워야 합니다.
+- `LocalRuntime`: `RuntimeRepository`를 주입받는 P0 메모리 실행기입니다. 현재 `MemoryRepository`를 사용하며, 다중 인스턴스 배포 전 PostgreSQL Repository로 전환해야 합니다.
+
 ### `backend/main.py`
 
-FastAPI 진입점입니다. `/health` 하나만 들어 있습니다.
+FastAPI 진입점입니다. 현재 `/health`, `/api/themes`, `/api/sessions`, `/api/agent`와 게임마스터 관련 router를 등록합니다.
 
 ```python
 @app.get("/health")
@@ -55,7 +67,7 @@ routers/extract.py
   → openai.chat.completions
 ```
 
-이유가 있습니다. **3차 프로젝트에서 이 자리에 RAG 그래프가 들어옵니다.** 호출부를 한곳에 모아두면 그때 이 파일 내부만 갈아끼우면 되고, 흩뿌려두면 전부 뜯어야 합니다. 지금 5분 들이면 그때 며칠을 법니다.
+이유가 있습니다. LLM 호출을 한곳에 모아두면 Provider를 비교하거나 교체할 때 영향 범위를 줄일 수 있습니다. 이 프로젝트에서는 RAG와 LangGraph를 사용하지 않으며, `services/llm.py`는 현재의 의도 구조화와 Provider 교체 경계로만 사용합니다.
 
 이 파일이 책임지는 것: 출력 계약 검증(Pydantic) · 실패 시 재시도와 폴백 · Langfuse 트레이스.
 
@@ -73,7 +85,7 @@ routers/extract.py
 | 예외와 함정 | 규칙만으로는 안 되는 경우 |
 | 하지 말아야 할 것 | 사람에게 넘겨야 하는 경계 |
 
-검색해서 그때그때 넣는 방식(RAG)은 3차에서 다룹니다. 2차에서는 **적어 넣습니다.**
+검색해서 그때그때 넣는 방식(RAG)과 LangGraph는 이 프로젝트에서 사용하지 않습니다. 2차에서는 승인된 도메인 지식과 힌트를 정적 데이터·규칙으로 관리합니다.
 
 ### `mcp_server/server.py`
 
@@ -93,7 +105,7 @@ def example_tool(query: str) -> str:
 
 필수 조건 4. **최소 30건**이고 정상·경계·실패 유도를 섞습니다.
 
-`dataset.jsonl`에 형식 예시 3건이 들어 있습니다.
+`dataset.jsonl`은 정상·경계·실패 유도 케이스를 포함한 최소 30건 평가셋을 관리합니다.
 
 ```json
 {"id": 1, "input": "...", "expected": "...", "note": "정상 케이스", "why": "이 답이 맞다고 본 이유"}
@@ -117,8 +129,8 @@ def example_tool(query: str) -> str:
 필수 조건 2. 채점자가 이 한 줄로 띄울 수 있어야 합니다.
 
 ```bash
-cp .env.example .env   # 키만 채우고
-docker compose up      # 한 줄
+Copy-Item .env.example .env   # PowerShell
+docker compose up             # 한 줄
 ```
 
 기본으로 `api`(FastAPI)와 `db`(Postgres) 두 서비스가 들어 있습니다. Postgres가 필요 없으면 지우고, Redis 같은 게 필요하면 추가하세요.

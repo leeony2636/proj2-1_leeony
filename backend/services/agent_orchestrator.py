@@ -9,12 +9,26 @@ from backend.schemas import (
     SessionState,
 )
 from backend.services.hint_decision import decide_hint_strength
+from backend.services.answer_vault import create_answer_offer
 from backend.services.langfuse_service import record_event
 from backend.services.llm import analyze_user_request
 from backend.services.mcp_client import MCPClient
 
 
 mcp = MCPClient()
+
+
+def _get_hint_with_retry(theme_id: str, puzzle_id: str, strength: str) -> str:
+    """일시적인 MCP 조회 오류만 1회 재시도한다."""
+    # 수정 사유: 승인 힌트가 없을 때 LLM이 임의 문구를 만들지 않도록
+    # 데이터 누락과 일시 장애를 분리해 상위 정책에서 처리한다.
+    for attempt in range(2):
+        try:
+            return mcp.get_hint(theme_id, puzzle_id, strength)
+        except (TimeoutError, ConnectionError):
+            if attempt == 1:
+                raise
+    raise RuntimeError("APPROVED_HINT_LOOKUP_FAILED")
 
 
 def _remaining_time_minutes(session: SessionState) -> float:
@@ -31,9 +45,19 @@ def handle_agent_request(request: AgentRequest) -> AgentResponse:
     # 2) 장비 이상/직원 직접 호출은 일반 힌트 경로로 처리하지 않는다.
     if intent.intent in {IntentType.EQUIPMENT_ISSUE, IntentType.MASTER_REQUEST}:
         if intent.intent == IntentType.EQUIPMENT_ISSUE:
-            mcp.equipment(request.session_id, request.team_id, intent.reason)
+            mcp.equipment(
+                request.session_id,
+                request.team_id,
+                intent.reason,
+                f"{request.request_id}:MASTER_REQUEST",
+            )
         else:
-            mcp.call_master(request.session_id, request.team_id, intent.reason)
+            mcp.call_master(
+                request.session_id,
+                request.team_id,
+                intent.reason,
+                f"{request.request_id}:MASTER_REQUEST",
+            )
 
         response = AgentResponse(
             status=AgentStatus.MASTER_REQUEST,
@@ -126,12 +150,58 @@ def handle_agent_request(request: AgentRequest) -> AgentResponse:
         frustration_high=intent.frustration_high,
     )
 
-    # 8) LLM이 새 힌트를 생성하지 않고 승인된 HintStep만 가져온다.
-    hint_text = mcp.get_hint(
-        session.theme_id,
-        request.puzzle_id,
-        decision.strength.value,
-    )
+    # 8) 승인 힌트 조회 실패는 유형별로 처리하고, 대체 힌트는 생성하지 않는다.
+    try:
+        hint_text = _get_hint_with_retry(
+            session.theme_id,
+            request.puzzle_id,
+            decision.strength.value,
+        )
+    except KeyError as exc:
+        if not str(exc).startswith("'APPROVED_HINT_NOT_FOUND"):
+            raise
+        # 수정 사유: 도메인 승인 데이터 누락은 게임마스터가 확인할 운영 오류다.
+        reason = "APPROVED_HINT_DATA_MISSING"
+        mcp.call_master(
+            request.session_id,
+            request.team_id,
+            reason,
+            f"{request.request_id}:MASTER_REQUEST",
+        )
+        response = AgentResponse(
+            status=AgentStatus.MASTER_REQUEST,
+            session_id=session.session_id,
+            team_id=session.team_id,
+            puzzle_id=request.puzzle_id,
+            intent=intent.intent,
+            emotion=intent.emotion,
+            decision_source="APPROVED_DATA_POLICY_HANDOFF",
+            reason_codes=[reason],
+            selected_tools=intent.recommended_tools + ["request_game_master"],
+            llm_provider=intent.provider,
+            llm_model=intent.model,
+            next_action="WAIT_FOR_GAME_MASTER",
+        )
+        record_event("approved_hint_missing", response.model_dump(mode="json"))
+        return response
+    except (TimeoutError, ConnectionError):
+        # 수정 사유: 일시 장애를 재시도한 뒤에도 실패하면 안전한 ERROR로 종료한다.
+        response = AgentResponse(
+            status=AgentStatus.ERROR,
+            session_id=session.session_id,
+            team_id=session.team_id,
+            puzzle_id=request.puzzle_id,
+            intent=intent.intent,
+            emotion=intent.emotion,
+            decision_source="APPROVED_DATA_RETRY_POLICY",
+            reason_codes=["APPROVED_HINT_LOOKUP_FAILED"],
+            selected_tools=intent.recommended_tools + ["get_approved_hint"],
+            llm_provider=intent.provider,
+            llm_model=intent.model,
+            next_action="RETRY_REQUEST",
+        )
+        record_event("approved_hint_lookup_failed", response.model_dump(mode="json"))
+        return response
 
     event = HintEvent(
         session_id=session.session_id,
@@ -140,12 +210,27 @@ def handle_agent_request(request: AgentRequest) -> AgentResponse:
         strength=decision.strength,
         delivered_at=datetime.now(timezone.utc),
         reason_codes=decision.reason_codes,
+        idempotency_key=f"{request.request_id}:PROVIDED:{request.puzzle_id}",
     )
     mcp.record_hint(event)
 
     strong = decision.strength.value == "STRONG"
+    answer_confirmation_required = strong and intent.direct_answer_request
+    answer_offer = (
+        create_answer_offer(
+            session.session_id,
+            session.team_id,
+            request.puzzle_id,
+        )
+        if answer_confirmation_required
+        else None
+    )
     response = AgentResponse(
-        status=AgentStatus.PROVIDE_HINT,
+        status=(
+            AgentStatus.ANSWER_CONFIRMATION_REQUIRED
+            if answer_confirmation_required
+            else AgentStatus.PROVIDE_HINT
+        ),
         session_id=session.session_id,
         team_id=session.team_id,
         puzzle_id=request.puzzle_id,
@@ -154,13 +239,9 @@ def handle_agent_request(request: AgentRequest) -> AgentResponse:
         hint_strength=decision.strength,
         hint_text=hint_text,
         decision_source="CODE_RULE",
-        answer_available=strong,
-        answer_reveal_url=(
-            f"/api/answers/reveal?session_id={session.session_id}"
-            f"&team_id={session.team_id}&puzzle_id={request.puzzle_id}"
-            if strong
-            else None
-        ),
+        offer_id=answer_offer["offer_id"] if answer_offer else None,
+        offer_expires_at=answer_offer["offer_expires_at"] if answer_offer else None,
+        requires_confirmation=answer_confirmation_required,
         remaining_time_minutes=decision.remaining_time_minutes,
         reason_codes=decision.reason_codes,
         selected_tools=intent.recommended_tools
