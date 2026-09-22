@@ -1,5 +1,5 @@
 from backend.schemas import IntentType
-from backend.services.intent_router import classify_intent_baseline
+from backend.services.baseline_router import classify_intent_baseline
 
 
 def test_equipment_routes_to_master_intent():
@@ -25,3 +25,9 @@ def test_frustration_requires_time_or_repeat_plus_helplessness():
     strong = classify_intent_baseline("시간이 없어. 계속 해도 못 풀겠어요")
     assert mild.frustration_high is False
     assert strong.frustration_high is True
+
+
+def test_time_extension_routes_to_game_master_approval():
+    result = classify_intent_baseline("시간을 더 주면 안 되나요?")
+    assert result.intent == IntentType.TIME_EXTENSION_REQUEST
+    assert result.reason == "TIME_EXTENSION_REQUEST"

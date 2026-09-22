@@ -43,3 +43,15 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
     result JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS conversation_turns (
+    turn_id BIGSERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(session_id),
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    request_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS conversation_turns_session_turn_idx
+    ON conversation_turns(session_id, turn_id);

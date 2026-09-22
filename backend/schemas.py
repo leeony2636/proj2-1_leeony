@@ -12,16 +12,38 @@ class IntentType(str, Enum):
     HINT = "HINT"
     EQUIPMENT_ISSUE = "EQUIPMENT_ISSUE"
     MASTER_REQUEST = "MASTER_REQUEST"
+    TIME_EXTENSION_REQUEST = "TIME_EXTENSION_REQUEST"
     UNCLEAR = "UNCLEAR"
 
 
 class AgentStatus(str, Enum):
     NEED_MORE_INFO = "NEED_MORE_INFO"
+    INFORMATION = "INFORMATION"
     PROVIDE_HINT = "PROVIDE_HINT"
     ANSWER_CONFIRMATION_REQUIRED = "ANSWER_CONFIRMATION_REQUIRED"
     MASTER_REQUEST = "MASTER_REQUEST"
+    MULTI_ACTION = "MULTI_ACTION"
     CLOSED = "CLOSED"
     ERROR = "ERROR"
+
+
+class AgentActionType(str, Enum):
+    PROVIDE_HINT = "PROVIDE_HINT"
+    REQUEST_GAME_MASTER = "REQUEST_GAME_MASTER"
+    REPORT_EQUIPMENT = "REPORT_EQUIPMENT"
+    REQUEST_TIME_EXTENSION = "REQUEST_TIME_EXTENSION"
+    ASK_CLARIFICATION = "ASK_CLARIFICATION"
+
+
+class LookupToolType(str, Enum):
+    GET_HINT_HISTORY = "get_hint_history"
+    GET_MASTER_REQUEST_STATUS = "get_master_request_status"
+
+
+class SupportNeed(str, Enum):
+    STANDARD = "STANDARD"
+    STRONG = "STRONG"
+    ANSWER = "ANSWER"
 
 
 class MasterRequestStatus(str, Enum):
@@ -95,19 +117,52 @@ class AgentRequest(BaseModel):
 
 
 class IntentResult(BaseModel):
+    # primary intent는 기존 API 호환을 위해 유지한다.
     intent: IntentType
+    intents: list[IntentType] = Field(default_factory=list)
+    actions: list[AgentActionType] = Field(default_factory=list)
+    lookup_tools: list[LookupToolType] = Field(default_factory=list)
     emotion: EmotionSignal = EmotionSignal.LOW
     needs_clarification: bool = False
+    clarifying_question: str | None = None
     reason: str = ""
-    recommended_tools: list[str] = Field(default_factory=list)
 
-    # 최신 기획안의 차별화 포인트를 구조화한다.
+    # LLM이 맥락과 Skill을 읽고 제안하는 의미 판단. 실행 권한은 코드가 가진다.
     direct_answer_request: bool = False
     strong_hint_request: bool = False
     frustration_high: bool = False
+    support_need: SupportNeed = SupportNeed.STANDARD
+    customer_guidance: str | None = None
+    staff_facts: list[str] = Field(default_factory=list)
+    staff_attempts: list[str] = Field(default_factory=list)
+    staff_unknowns: list[str] = Field(default_factory=list)
+    applied_skill_rules: list[str] = Field(default_factory=list)
+    context_notes: list[str] = Field(default_factory=list)
 
-    provider: str = "baseline"
-    model: str = "baseline"
+    provider: str = "unknown"
+    model: str = "unknown"
+    prompt_version: str | None = None
+    skill_version: str | None = None
+
+
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+    request_id: str | None = None
+
+
+class AgentContext(BaseModel):
+    session_id: str
+    team_id: str
+    theme_id: str
+    current_puzzle_id: str | None = None
+    requested_puzzle_id: str | None = None
+    remaining_time_minutes: float
+    puzzle_context: dict | None = None
+    recent_turns: list[ConversationTurn] = Field(default_factory=list)
+    domain_skill: dict = Field(default_factory=dict)
+    tool_results: dict[str, object] = Field(default_factory=dict)
 
 
 class HintDecision(BaseModel):
@@ -134,7 +189,7 @@ class AgentResponse(BaseModel):
     offer_expires_at: datetime | None = None
     requires_confirmation: bool = False
 
-    # 데모에서 "LLM이 최종 판정을 하지 않는다"는 사실을 보이기 위한 필드.
+    # 판단 주체(LLM 단계 + 코드 경계 + 도구 후속 여부)를 관측하기 위한 필드.
     decision_source: str | None = None
     spoiler_guard: str = "ANSWERVAULT_SEPARATED"
 
@@ -145,7 +200,15 @@ class AgentResponse(BaseModel):
     selected_tools: list[str] = Field(default_factory=list)
     llm_provider: str | None = None
     llm_model: str | None = None
+    prompt_version: str | None = None
+    skill_version: str | None = None
+    llm_call_count: int = 0
     next_action: str | None = None
+    customer_message: str | None = None
+    completed_actions: list[AgentActionType] = Field(default_factory=list)
+    pending_actions: list[AgentActionType] = Field(default_factory=list)
+    master_request_ids: list[str] = Field(default_factory=list)
+    context_notes: list[str] = Field(default_factory=list)
 
 
 class AnswerConfirmationRequest(BaseModel):

@@ -11,9 +11,8 @@ describe("escape room routes", () => {
     expect(screen.queryByText("정답 보기")).toBeNull();
   });
 
-  it("renders Escape Ops on the game master route", () => {
+  it("renders the live game master request queue", () => {
     render(<MemoryRouter initialEntries={["/game-master"]}><App /></MemoryRouter>);
-    expect(screen.getByTitle("ESCAPE OPS 게임마스터 관제 화면").getAttribute("src"))
-      .toBe("/escape-ops/index.html");
+    expect(screen.getByText("게임마스터 요청 큐")).toBeTruthy();
   });
 });

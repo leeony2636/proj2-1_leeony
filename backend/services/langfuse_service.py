@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - requirements 설치 전에도 Agent는
 
 class ObservationEvent(BaseModel):
     event_name: str
+    trace_id: str | None = None
     request_id: str | None = None
     session_id: str | None = None
     team_id_hash: str | None = None
@@ -33,6 +34,21 @@ class ObservationEvent(BaseModel):
     decision_source: str | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
+    prompt_version: str | None = None
+    skill_version: str | None = None
+    llm_stage: str | None = None
+    latency_ms: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: float | None = None
+    cost_source: str | None = None
+    retry_count: int | None = None
+    error_type: str | None = None
+    tool_name: str | None = None
+    tool_status: str | None = None
+    evaluation_name: str | None = None
+    evaluation_score: float | None = None
     next_action: str | None = None
     stt_provider: str | None = None
     stt_model: str | None = None
@@ -54,6 +70,7 @@ def build_observation(event_name: str, payload: dict) -> ObservationEvent:
     """응답 payload에서 관측 허용 필드만 추출한다."""
     return ObservationEvent(
         event_name=event_name,
+        trace_id=payload.get("trace_id") or payload.get("request_id"),
         request_id=payload.get("request_id"),
         session_id=payload.get("session_id"),
         team_id_hash=_hash_identifier(payload.get("team_id")),
@@ -67,6 +84,21 @@ def build_observation(event_name: str, payload: dict) -> ObservationEvent:
         decision_source=payload.get("decision_source"),
         llm_provider=payload.get("llm_provider"),
         llm_model=payload.get("llm_model"),
+        prompt_version=payload.get("prompt_version"),
+        skill_version=payload.get("skill_version"),
+        llm_stage=payload.get("llm_stage"),
+        latency_ms=payload.get("latency_ms"),
+        input_tokens=payload.get("input_tokens"),
+        output_tokens=payload.get("output_tokens"),
+        total_tokens=payload.get("total_tokens"),
+        cost_usd=payload.get("cost_usd"),
+        cost_source=payload.get("cost_source"),
+        retry_count=payload.get("retry_count"),
+        error_type=payload.get("error_type"),
+        tool_name=payload.get("tool_name"),
+        tool_status=payload.get("tool_status"),
+        evaluation_name=payload.get("evaluation_name"),
+        evaluation_score=payload.get("evaluation_score"),
         next_action=payload.get("next_action"),
         stt_provider=payload.get("stt_provider"),
         stt_model=payload.get("stt_model"),
@@ -114,7 +146,12 @@ def record_event(event_name: str, payload: dict) -> bool:
             name=f"agent.{event_name}",
             as_type="chain",
             output=safe_payload,
-            metadata={"request_id": observation.request_id, "status": observation.status},
+            metadata={
+                "trace_id": observation.trace_id,
+                "request_id": observation.request_id,
+                "session_id": observation.session_id,
+                "status": observation.status,
+            },
         ):
             pass
         if os.getenv("LANGFUSE_FLUSH_ON_EVENT", "true").lower() == "true":

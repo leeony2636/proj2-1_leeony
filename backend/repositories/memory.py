@@ -3,7 +3,7 @@ from __future__ import annotations
 from threading import Lock
 
 from backend.repositories.protocol import RuntimeRepository
-from backend.schemas import HintEvent, SessionState
+from backend.schemas import ConversationTurn, HintEvent, SessionState
 
 
 class MemoryRepository(RuntimeRepository):
@@ -18,6 +18,7 @@ class MemoryRepository(RuntimeRepository):
         self._hint_events: list[HintEvent] = []
         self._master_requests: list[dict] = []
         self._idempotency: dict[str, tuple[dict, dict]] = {}
+        self._conversation_turns: dict[str, list[ConversationTurn]] = {}
         self._lock = Lock()
 
     def save_session(self, session: SessionState) -> None:
@@ -74,3 +75,12 @@ class MemoryRepository(RuntimeRepository):
     def list_master_requests(self) -> list[dict]:
         with self._lock:
             return [dict(item) for item in self._master_requests]
+
+    def append_conversation_turn(self, session_id: str, turn: ConversationTurn) -> None:
+        with self._lock:
+            self._conversation_turns.setdefault(session_id, []).append(turn)
+
+    def list_conversation_turns(self, session_id: str, limit: int = 6) -> list[ConversationTurn]:
+        with self._lock:
+            turns = self._conversation_turns.get(session_id, [])
+            return list(turns[-max(limit, 0):])

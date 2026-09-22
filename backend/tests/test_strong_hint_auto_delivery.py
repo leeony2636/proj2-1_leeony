@@ -10,7 +10,7 @@ class StrongHintAutoDeliveryTests(unittest.TestCase):
         runtime = LocalRuntime()
         session = runtime.create_session("professors_lab", "TEAM-AUTO-001")
 
-        # 수정 사유: STRONG은 고객 동의 대기가 아니라 정책 충족 시 자동 제공으로 확정했다.
+        # STRONG support_need는 승인된 STRONG 힌트 데이터로 매핑되며 정답 공개와는 분리된다.
         response = handle_agent_request(
             AgentRequest(
                 session_id=session.session_id,

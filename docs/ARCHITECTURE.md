@@ -1,97 +1,80 @@
 # Architecture
 
-## P0 구조
-
-기준 문제 정의는 `docs/01-operations-agent-problem-definition.md`이다. 수정 기획안의 운영 보조 Agent 범위를 현재 구현 가능한 P0에 맞춰 적용한다.
-
+## 현재 처리 흐름
 
 ```text
-Customer / GameMaster UI
-          |
-          +-- text input ------------------+
-          +-- voice submit → STT Adapter --+
-                                           v
-       FastAPI
-          |
-          +-- services/llm.py
-          |      └─ STT 결과 텍스트의 의도/감정 구조화
-          |
-          +-- agent_orchestrator.py
-          |
-          v
-      MCP Client
-          |
-          v
-     MCP Tool Layer
-          |
-          v
-      LocalRuntime
+Customer UI
+   ↓
+FastAPI /api/agent
+   ↓
+Code Guard 1
+(session/team/current puzzle/spoiler/session closed)
+   ↓
+Context Builder
+(minimum session context + recent turns + Domain Skill v2026-09-22.v3)
+   ↓
+LLM INITIAL decision
+(intent(s) + lookup_tools + clarification + actions + support_need + self-reported skill rule ids)
+   │
+   ├─ 조회 불필요 → 바로 Code Guard 2
+   │
+   └─ 조회 필요 → read-only MCP lookup
+                  (hint history / current session master-request status)
+                        ↓
+                  LLM FOLLOWUP_AFTER_TOOLS
+                  (tool result를 보고 최종 action/question 결정)
+                        ↓
+Code Guard 2
+(allowed action / approved hint / AnswerVault / idempotency / state transition)
+   ↓
+Side-effect MCP tools
+   ↓
+Verified execution result + AgentResponse + conversation history
 ```
 
-## STT 입력 경계
+## LLM이 실제로 결정하는 것
 
-- STT는 음성 파일 또는 브라우저 녹음 결과를 텍스트로 변환하는 입력 Adapter다.
-- STT는 의도, 감정, 힌트 강도, 정답을 판단하지 않는다. 변환된 텍스트만 `AgentRequest.message`로 전달한다.
-- MVP는 고객이 음성 요청 버튼을 눌러 제출하는 방식이며 상시 마이크 청취·선제 개입은 범위에서 제외한다.
-- 빈 전사, 낮은 신뢰도, 변환 실패는 LLM/MCP 판정 전에 재입력 요청으로 종료한다.
-- Provider와 모델은 `services/stt.py` 또는 동등한 Adapter 경계 뒤에 둔다. 실험상 선택 모델은 `openai/whisper-large-v3-turbo + Escape-room Adapter / Epoch 2`이지만, 현재 서비스 코드는 `MockSTTAdapter`이며 실제 통합은 미완료다.
+- 표현과 최근 대화를 이용한 요청 의미·복합성
+- 필요한 정보가 DB/MCP 조회인지 고객 확인 질문인지
+- `get_hint_history`, `get_master_request_status` 중 필요한 읽기 조회
+- 조회 결과를 본 뒤 힌트/직원 요청/장비 요청/질문/정보 안내 중 후속 대응
+- `STANDARD/STRONG/ANSWER` 지원 필요도
+- 직원 전달용 `facts / attempts / unknowns`
+- 자신의 판단에 사용했다고 보고하는 Domain Skill rule id
 
-현재 `MCPClient`는 로컬 함수 호출로 연결된 P0 골격입니다.
-실제 FastMCP transport를 붙일 때 `backend/services/mcp_client.py` 내부만 교체하는 방향입니다.
+`applied_skill_rules`는 LLM 자기보고 값이다. 존재하는 rule id인지 필터링할 수는 있지만, 실제 규칙을 올바르게 적용했는지는 평가에서 별도로 판정한다.
 
-따라서 현재 구조의 `MCP Client` 표기는 네트워크 MCP Client가 아니라 같은 프로세스에서 도구 함수를 호출하는 adapter를 뜻합니다. 별도 FastMCP transport와 다중 인스턴스 운영은 P1 배포 작업으로 분리합니다.
+## 코드가 결정하거나 강제하는 것
 
-## 외부 Runtime 확장
+- 세션·팀·테마·현재 퍼즐 경계
+- LLM 출력 스키마와 허용 action/lookup
+- 승인된 `WEAK/STRONG` 힌트만 조회하는 콘텐츠 경계
+- 정답 AnswerVault/동의 경계
+- 시간 연장 자동 적용 금지, 고객 진도 직접 변경 금지
+- idempotency, 운영 요청 상태 전이, 조회/승인 힌트 재시도 제한
+- 실제 도구 실행 성공 여부와 최종 응답의 구조적 일치
 
-```text
-MCP Tool
-  └─ Runtime Adapter
-       ├─ LocalRuntime    (P0)
-       ├─ EscappAdapter   (후속 검토)
-       └─ ERCCAdapter     (후속 검토)
-```
+`support_need`의 도메인상 적절성은 코드가 재판정하지 않는다. `hint_policy.py`는 LLM 판단을 승인된 힌트 데이터 단계로 매핑할 뿐이며, 의미 품질은 사람이 정한 Domain Skill/평가셋으로 검증한다.
 
-외부 제품 API를 Agent가 직접 호출하지 않게 분리합니다.
+## Domain Skill 적용 경계
 
-프론트엔드는 하나의 React + TypeScript + Vite 앱에서 `/customer`와 `/game-master`를 제공하고 Vercel에 정적 배포합니다.
-<!-- 통합 메모: temp-git의 정적 HTML 화면 대신 현재 확정된 단일 Vite 앱을 기준으로 설명합니다. -->
+- `skills/SKILL.md`: 현장 경험/과거 기준 원문
+- `skills/domain_policy.json`: 실제 LLM 입력용 compact policy
+- 현재 적용 버전: `2026-09-22.v3`
+- 위치 혼동은 즉시 강한 지원으로 확대하지 않는 참고 기준을 사용
+- 문제 번호/전체 문제 수는 내부 정보로 유지하고 고객 안내에 직접 노출하지 않음
+- 숫자 기반 힌트 강도 규칙과 재요청 자동 STRONG은 미확정으로 유지
 
-## DB
+## 고정 조회를 줄인 이유
 
-강사 scaffold에는 PostgreSQL 서비스가 기본 포함되어 있습니다.
-현재 LocalRuntime은 메모리 저장소이므로 실제 Backend/MCP 분리 배포 전에는
-공유 DB 모델로 교체해야 합니다.
+세션·현재 퍼즐·최근 대화는 최소 맥락으로 항상 제공한다. 반면 힌트 이력이나 기존 직원 요청 상태는 모든 질문에 필요하지 않으므로 LLM이 `lookup_tools`로 선택했을 때만 조회한다. 조회가 발생하면 최대 한 번의 후속 LLM 판단을 수행해 반복 루프를 만들지 않는다.
 
-## 게임마스터 운영 보조 방향
+## 요청 단위 관측
 
-현재 `/game-master`에는 정적 Escape Ops 데모와 실제 `/api/master/requests` 요청 큐가 함께 존재한다. 정적 데모의 방/시간/진도 값은 실제 Runtime 데이터가 아니므로 운영 판정의 근거로 사용하지 않는다.
+초기 LLM 판단, 조회 도구, 후속 LLM 판단, 승인 힌트/운영 요청 처리, 최종 응답은 같은 `request_id`와 `session_id`로 연결한다. LLM 호출에는 Prompt/Skill 버전, 모델, stage, latency, token, provider가 제공한 cost를 기록한다. 비용이 미제공이면 `None/NOT_PROVIDED`로 유지하며 0으로 바꾸지 않는다.
 
-팀이 논의한 "카메라 없이 여러 방의 진행 상태를 빠르게 파악"하는 방향은 현재 서버에 이미 존재하는 `SessionState`의 시간·진도, HintEvent 이력, Master Request 상태를 활용하는 범위에서는 기존 구조와 맞는다. 다만 다음이 없어 실제 운영 코파일럿 로직은 아직 구현하지 않는다.
+## 대표 분기
 
-- 전체 활성 세션을 조회하는 Repository/MCP 계약
-- 어느 방을 먼저 보아야 하는지에 대한 팀 승인 우선순위 규칙
-- 위험도/주의도 점수의 판정 기준과 평가 정답
-- 실데이터 기반 운영 화면 검증
-
-카메라/CCTV 영상 분석은 현재 P0 범위 밖이며 새 입력 신호로 추가하지 않는다.
-
-## 상태 변경 경계
-
-- `mark_puzzle_solved`는 Runtime 내부 기능으로 남지만 FastMCP 공개 도구에는 등록하지 않는다.
-- 공개 고객 API에도 퍼즐 solve route를 두지 않는다. 진도 변경은 게임마스터 또는 내부 이벤트의 인증/권한 계약이 확정된 뒤 연결한다.
-- 게임마스터 요청 상태 변경은 `update_master_request` MCP 도구와 `/api/master/requests/*` API로 분리한다.
-- 수정 기획안의 최초 운영 요청 상태는 `OPEN`이며 `OPEN → ACKNOWLEDGED → RESOLVED`를 기본 흐름으로 사용한다. `CANCELED`는 명시적 취소 종료 상태다.
-
-## 입장 경계
-
-MVP는 `session_id` + `team_id` 임시 입장만 사용한다. QR 입장은 후속 확장으로 두며 현재 FastAPI route와 세션 생성 응답에는 QR payload를 포함하지 않는다.
-
-## 기획에는 있으나 P0에서 아직 연결하지 않는 영역
-
-- 일반 문의(`GENERAL_INQUIRY`)의 응답 schema/처리 정책
-- LLM의 사용자 친화적 최종 문장 생성 단계
-- 장비 이상 전용 장애 이력 저장 구조
-- 전체 활성 세션 목록/여러 방 운영 요약/자동 우선순위 규칙
-- 게임 종료 리포트·테마별 통계·관리자 화면
-
-이 항목들은 이름·필드·판정 기준을 임의로 만들지 않고 팀 계약이 확정된 뒤 추가한다.
+- `아까 직원 불렀는데 아직 안 왔어요.` → 직원 요청 상태 조회 → 결과를 본 뒤 중복 접수/안내를 다시 판단
+- `아까 힌트대로 했는데 안 열려요.` → 같은 퍼즐 힌트 이력 조회 → 풀이 어려움/사용법/장비 가능성을 구분하기 위한 질문 또는 후속 행동 판단
+- `힌트도 필요하고 자물쇠가 반응하지 않아요.` → 독립 요청인지 동일 문제의 다른 해석인지 불명확하면 실행 전에 질문 가능

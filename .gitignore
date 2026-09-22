@@ -32,5 +32,6 @@ build/
 # Codex execution-plan scratch ledger
 .superpowers/
 
-# Generated local artifacts
-output/
+# Local evaluation run outputs
+evals/results/*.json
+!evals/results/.gitkeep

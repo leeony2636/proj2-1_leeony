@@ -39,7 +39,7 @@ export type VoiceAgentResponse = {
 };
 
 export type AgentResponse = {
-  status: "NEED_MORE_INFO" | "PROVIDE_HINT" | "ANSWER_CONFIRMATION_REQUIRED" | "MASTER_REQUEST" | "CLOSED" | "ERROR";
+  status: "NEED_MORE_INFO" | "INFORMATION" | "PROVIDE_HINT" | "ANSWER_CONFIRMATION_REQUIRED" | "MASTER_REQUEST" | "MULTI_ACTION" | "CLOSED" | "ERROR";
   hint_strength?: "WEAK" | "NORMAL" | "STRONG";
   hint_text?: string | null;
   offer_id?: string | null;
@@ -47,6 +47,10 @@ export type AgentResponse = {
   requires_confirmation?: boolean;
   reason_codes?: string[];
   next_action?: string | null;
+  customer_message?: string | null;
+  completed_actions?: string[];
+  pending_actions?: string[];
+  master_request_ids?: string[];
 };
 
 export type AnswerConfirmationRequest = {

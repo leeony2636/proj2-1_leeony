@@ -71,3 +71,55 @@ def test_record_event_sends_only_safe_observation_to_langfuse(monkeypatch):
     assert "hint_text" not in observation["output"]
     assert "answer" not in observation["output"]
     assert calls[-1] == {"flushed": True}
+
+
+def test_observation_keeps_prompt_skill_usage_metadata_without_sensitive_content():
+    event = build_observation(
+        "llm_call",
+        {
+            "llm_provider": "openrouter",
+            "llm_model": "example-model",
+            "prompt_version": "agent-domain-v2.2",
+            "skill_version": "2026-09-22.v3",
+            "llm_stage": "FOLLOWUP_AFTER_TOOLS",
+            "latency_ms": 123.4,
+            "input_tokens": 100,
+            "output_tokens": 40,
+            "total_tokens": 140,
+            "cost_usd": 0.001,
+            "message": "민감할 수 있는 고객 원문",
+            "hint_text": "승인 힌트 본문",
+        },
+    )
+
+    dumped = event.model_dump(mode="json", exclude_none=True)
+    assert dumped["prompt_version"] == "agent-domain-v2.2"
+    assert dumped["skill_version"] == "2026-09-22.v3"
+    assert dumped["llm_stage"] == "FOLLOWUP_AFTER_TOOLS"
+    assert dumped["total_tokens"] == 140
+    assert dumped["cost_usd"] == 0.001
+    assert "message" not in dumped
+    assert "hint_text" not in dumped
+
+
+def test_observation_links_request_and_keeps_missing_cost_as_missing():
+    event = build_observation(
+        "llm_call",
+        {
+            "request_id": "req-link-1",
+            "session_id": "session-link-1",
+            "llm_stage": "INITIAL",
+            "cost_usd": None,
+            "cost_source": "NOT_PROVIDED",
+            "retry_count": 1,
+            "error_type": "ExampleError",
+        },
+    )
+    dumped = event.model_dump(mode="json", exclude_none=True)
+    assert dumped["trace_id"] == "req-link-1"
+    assert dumped["request_id"] == "req-link-1"
+    assert dumped["session_id"] == "session-link-1"
+    assert "cost_usd" not in dumped
+    assert dumped["cost_source"] == "NOT_PROVIDED"
+    assert dumped["retry_count"] == 1
+    assert dumped["error_type"] == "ExampleError"

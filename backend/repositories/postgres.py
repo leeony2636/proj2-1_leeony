@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Iterator
 
-from backend.schemas import HintEvent, SessionState
+from backend.schemas import ConversationTurn, HintEvent, SessionState
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -190,3 +190,22 @@ class PostgresRepository:
                 "SELECT * FROM master_requests ORDER BY created_at"
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def append_conversation_turn(self, session_id: str, turn: ConversationTurn) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """INSERT INTO conversation_turns(session_id, role, content, created_at, request_id)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (session_id, turn.role, turn.content, turn.created_at, turn.request_id),
+            )
+
+    def list_conversation_turns(self, session_id: str, limit: int = 6) -> list[ConversationTurn]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT role, content, created_at, request_id
+                   FROM conversation_turns WHERE session_id=%s
+                   ORDER BY turn_id DESC LIMIT %s""",
+                (session_id, max(limit, 0)),
+            ).fetchall()
+        rows = list(reversed(rows))
+        return [ConversationTurn(**dict(row)) for row in rows]

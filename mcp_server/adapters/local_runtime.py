@@ -8,7 +8,7 @@ import uuid
 
 from backend.repositories.memory import MemoryRepository
 from backend.repositories.protocol import RuntimeRepository
-from backend.schemas import HintEvent, SessionState
+from backend.schemas import ConversationTurn, HintEvent, SessionState
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -96,8 +96,8 @@ class LocalRuntime:
         return self.repository.list_hint_events(session_id, puzzle_id)
 
     def get_approved_hint(self, theme_id: str, puzzle_id: str, strength: str) -> str:
-        # 수정 사유: WEAK·STRONG은 코드 정책 통과 즉시 승인 힌트를 조회한다.
-        # offer_id 검증은 현재 STRONG 경로에서 제거하고 ANSWER 후속 계약으로 유보한다.
+        # WEAK·STRONG은 LLM의 support_need 판단 뒤 승인 데이터 경계에서 조회한다.
+        # 이 함수는 강도 판단의 도메인 적절성을 재판정하지 않는다.
         try: return self._hints(theme_id)[puzzle_id][strength]
         except KeyError as exc: raise KeyError(f"APPROVED_HINT_NOT_FOUND:{theme_id}:{puzzle_id}:{strength}") from exc
     def record_hint_delivery(self, event: HintEvent) -> dict:
@@ -231,3 +231,30 @@ class LocalRuntime:
 
     def get_master_requests(self) -> list[dict]:
         return self.repository.list_master_requests()
+
+    def get_master_requests_for_session(
+        self, session_id: str, team_id: str, limit: int = 5
+    ) -> list[dict]:
+        """현재 팀/세션의 최근 운영 요청만 반환한다.
+
+        다른 팀 요청이 LLM context로 섞이지 않도록 세션 소유권을 먼저 검증한다.
+        """
+        session = self.get_game_session(session_id)
+        if session.team_id != team_id:
+            raise PermissionError("TEAM_SESSION_MISMATCH")
+        items = [
+            dict(item)
+            for item in self.repository.list_master_requests()
+            if item.get("session_id") == session_id and item.get("team_id") == team_id
+        ]
+        items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+        return items[: max(limit, 0)]
+
+    def record_conversation_turn(self, session_id: str, turn: ConversationTurn) -> None:
+        # 대화 맥락은 LLM이 생략된 대상을 해석할 때만 사용하며 최근 일부만 조회한다.
+        self.get_game_session(session_id)
+        self.repository.append_conversation_turn(session_id, turn)
+
+    def get_conversation_history(self, session_id: str, limit: int = 6) -> list[ConversationTurn]:
+        self.get_game_session(session_id)
+        return self.repository.list_conversation_turns(session_id, limit=limit)

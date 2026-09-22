@@ -25,6 +25,15 @@ def get_master_requests() -> list[dict]:
     return runtime.get_master_requests()
 
 
+def get_master_request_status(
+    session_id: str,
+    team_id: str,
+    limit: int = 5,
+) -> list[dict]:
+    """현재 팀/세션의 최근 운영 요청 상태를 조회한다."""
+    return runtime.get_master_requests_for_session(session_id, team_id, limit=limit)
+
+
 def update_master_request(
     request_id: str,
     status: str,

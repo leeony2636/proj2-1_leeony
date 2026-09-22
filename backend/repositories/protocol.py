@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from backend.schemas import HintEvent, SessionState
+from backend.schemas import ConversationTurn, HintEvent, SessionState
 
 
 class RuntimeRepository(Protocol):
@@ -27,3 +27,7 @@ class RuntimeRepository(Protocol):
     def update_master_request(self, request: dict) -> None: ...
 
     def list_master_requests(self) -> list[dict]: ...
+
+    def append_conversation_turn(self, session_id: str, turn: ConversationTurn) -> None: ...
+
+    def list_conversation_turns(self, session_id: str, limit: int = 6) -> list[ConversationTurn]: ...

@@ -1,0 +1,98 @@
+{
+  "version": "2026-09-22.v3",
+  "source": "skills/SKILL.md",
+  "confirmed_boundaries": [
+    {
+      "id": "ANSWER_TEXT_GUARD",
+      "statement": "정답 자체는 Agent 응답 텍스트에 먼저 노출하지 않고 AnswerVault와 사용자 동의 경계로 보호한다.",
+      "policy_status": "CONFIRMED_BOUNDARY",
+      "visibility": "CUSTOMER_SAFE_BEHAVIOR"
+    },
+    {
+      "id": "SESSION_THEME_ISOLATION",
+      "statement": "현재 세션의 팀·테마·현재 퍼즐 범위를 벗어난 정보는 조회하거나 노출하지 않는다.",
+      "policy_status": "CONFIRMED_BOUNDARY",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "NO_DIRECT_PROGRESS_OR_TIME_CHANGE",
+      "statement": "고객 Agent는 퍼즐 진도나 타이머를 직접 변경하지 않으며 시간 연장은 직원 요청으로만 전달한다.",
+      "policy_status": "CONFIRMED_BOUNDARY",
+      "visibility": "CUSTOMER_SAFE_BEHAVIOR"
+    },
+    {
+      "id": "APPROVED_HINT_ONLY",
+      "statement": "힌트 본문은 승인된 WEAK/STRONG 데이터만 사용하고 LLM이 새 힌트나 정답을 생성하지 않는다.",
+      "policy_status": "CONFIRMED_BOUNDARY",
+      "visibility": "CUSTOMER_VISIBLE_AFTER_CODE_APPROVAL"
+    },
+    {
+      "id": "PUZZLE_POSITION_METADATA_PRIVATE",
+      "statement": "문제 번호(puzzle_id/순서)와 테마의 전체 문제 수는 내부 운영 정보로만 사용하고 고객 안내에는 직접 노출하지 않는다. 진도 확인이 필요하면 번호 대신 현재 진행 중인 문제처럼 표현한다.",
+      "policy_status": "CONFIRMED_BOUNDARY",
+      "visibility": "INTERNAL_ONLY"
+    }
+  ],
+  "llm_guidance": [
+    {
+      "id": "EQUIPMENT_AMBIGUITY",
+      "statement": "'안 열린다/반응하지 않는다'는 표현은 풀이 어려움, 사용법 문제, 정답 오류, 실제 장비 이상이 섞일 수 있으므로 근거가 없으면 장비 이상으로 단정하거나 힌트와 직원 호출을 동시에 자동 실행하지 않는다. 필요한 경우 원인을 구분하는 질문 또는 기존 요청 상태 조회를 선택한다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "FRUSTRATION_CONTEXT",
+      "statement": "단순 '모르겠다'만으로 강한 지원을 결정하지 않는다. 반복 시도·시간 경과·무력감 등 실제 맥락을 함께 보고 지원 수준을 판단한다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "FOLLOWUP_CONTEXT",
+      "statement": "'아까/그거/아직' 같은 후속 표현은 최근 대화, 같은 퍼즐의 힌트 이력, 기존 운영 요청 상태를 필요한 범위에서 조회해 연결한다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "CLARIFY_WHEN_NEEDED",
+      "statement": "독립적인 복합 요청인지 하나의 문제를 다르게 표현한 것인지 구분되지 않으면 부작용 실행 전에 한 번에 하나의 핵심 확인 질문을 한다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "STAFF_HANDOFF_FACTS",
+      "statement": "직원 전달 요약은 고객이 말한 사실, 이미 시도한 내용, 아직 확인되지 않은 사항을 구분해 작성하며 원인·긴급도·우선순위를 추측하지 않는다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "POSITION_CONFUSION_SUPPORT",
+      "statement": "단순히 어느 서랍·장치·위치인지 찾지 못한 상황은 강한 감정 표현이 있더라도 곧바로 강한 지원으로 확대하지 않는다. 위치 파악 문제만 확인되면 승인된 약한 힌트 수준의 위치 안내를 우선 고려하고, 풀이 실패·반복 시도·장비 이상이 섞였는지는 별도로 판단한다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
+    }
+  ],
+  "unconfirmed_policies": [
+    {
+      "id": "NUMERIC_HINT_STRENGTH_RULE",
+      "statement": "남은 시간 15분/남은 문제 비율 50% 같은 숫자 기준으로 힌트 강도를 자동 결정하는 규칙",
+      "status": "TEAM_DECISION_REQUIRED",
+      "policy_status": "TEAM_DECISION_REQUIRED",
+      "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "AUTO_REREQUEST_ESCALATION",
+      "statement": "짧은 시간 내 같은 문제 재요청이면 자동으로 STRONG으로 승격하는 규칙",
+      "status": "TEAM_DECISION_REQUIRED",
+      "policy_status": "TEAM_DECISION_REQUIRED",
+      "visibility": "INTERNAL_ONLY"
+    }
+  ],
+  "visibility_legend": {
+    "INTERNAL_ONLY": "LLM/코드 판단에만 사용하며 고객 안내에 값 자체를 노출하지 않는다.",
+    "CUSTOMER_SAFE_BEHAVIOR": "고객에게 정책명이나 내부 값은 노출하지 않고, 해당 경계를 지키는 안내만 생성할 수 있다.",
+    "CUSTOMER_VISIBLE_AFTER_CODE_APPROVAL": "코드가 승인한 콘텐츠만 고객에게 전달할 수 있다."
+  },
+  "reporting_semantics": {
+    "applied_skill_rules": "LLM이 자신의 판단에 적용했다고 보고한 rule id의 자기보고 목록이다. rule id 존재 확인은 가능하지만 실제 규칙 준수 여부를 증명하지 않으며, 준수 여부는 별도 평가에서 판정한다."
+  }
+}

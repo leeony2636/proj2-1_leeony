@@ -14,8 +14,8 @@ def get_hint_history(session_id: str, puzzle_id: str) -> list[dict]:
 
 
 def get_approved_hint(theme_id: str, puzzle_id: str, strength: str) -> str:
-    # STRONG은 동의 대기 단계가 아니라 코드 정책 충족 시 자동 전달한다.
-    # ANSWER 동의/offer 흐름은 별도 승인 콘텐츠 계약을 확정한 뒤 추가한다.
+    # STRONG도 승인 데이터만 조회한다. 강도 판단 자체는 LLM/도메인 평가 대상이며
+    # ANSWER 정답 공개는 별도 AnswerVault/동의 경계를 유지한다.
     return runtime.get_approved_hint(theme_id, puzzle_id, strength)
 
 
