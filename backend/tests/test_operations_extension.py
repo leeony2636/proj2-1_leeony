@@ -29,7 +29,8 @@ def test_time_extension_is_handed_to_game_master_without_timer_change():
     assert response.intent == IntentType.TIME_EXTENSION_REQUEST
     assert response.next_action == "WAIT_FOR_GAME_MASTER"
     assert session_after["duration_minutes"] == duration_minutes_before
-    assert matching_requests[-1]["reason"] == "TIME_EXTENSION_REQUEST"
+    assert matching_requests[-1]["reason"] == "DIRECT_REQUEST"
+    assert "TIME_EXTENSION_REQUEST" in matching_requests[-1]["summary"]
 
 
 def test_equipment_issue_is_recorded_in_mock_slack_without_external_call():
@@ -80,4 +81,6 @@ def test_mock_slack_failure_does_not_fail_equipment_request(monkeypatch):
 
     assert response.status == AgentStatus.MASTER_REQUEST
     assert response.intent == IntentType.EQUIPMENT_ISSUE
-    assert matching_requests[-1]["reason"].startswith("EQUIPMENT_ISSUE:")
+    assert matching_requests[-1]["reason"] == "PROP_ERROR"
+    assert matching_requests[-1]["summary"]
+

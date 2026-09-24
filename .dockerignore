@@ -1,0 +1,15 @@
+# 이미지가 실제로 COPY하는 경로만 build context에 포함한다.
+# 로컬 .env와 작업 중 생성된 임시 파일이 Docker daemon으로 전송되는 것을 막는다.
+**
+!Dockerfile
+!backend/
+!backend/**
+!mcp_server/
+!mcp_server/**
+!skills/
+!skills/**
+
+backend/**/__pycache__/
+backend/**/*.py[cod]
+mcp_server/**/__pycache__/
+mcp_server/**/*.py[cod]

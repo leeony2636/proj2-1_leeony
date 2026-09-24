@@ -4,7 +4,7 @@ AI 코딩 에이전트(Claude Code, Codex, Cursor 등)가 이 저장소에서 �
 
 ## 프로젝트 개요
 
-방탈출 테마 플레이어의 상황에 맞는 힌트와 질의응답을 제공하고, 게임마스터의 개입을 최소화하는 Agent를 개발합니다.
+방탈출 카페 고객의 힌트·장비 이상·직원 호출·운영 상태 문의를 연결하는 운영 보조 Agent를 개발합니다. 기존 힌트 제공은 고객 지원 모듈로 유지합니다.
 
 ## 기술 스택과 구현 단계
 
@@ -15,11 +15,11 @@ AI 코딩 에이전트(Claude Code, Codex, Cursor 등)가 이 저장소에서 �
 3. MCP 도구 구조: FastMCP
 4. 데이터 저장: 메모리 기반 `LocalRuntime`
 5. 프론트엔드: React / TypeScript / Vite
-6. 관측·로그: Langfuse 연동 경계와 no-op placeholder
+6. 관측·로그: Langfuse safe allowlist와 평가 score 기록 코드 구현, 실제 계정 연결은 팀 환경에서 검증
 7. 실행: Docker / Docker Compose
 8. 프론트엔드 배포 후보: Vercel
 
-현재 MCP 연결은 네트워크 transport가 아니라 같은 프로세스에서 도구 함수를 호출하는 P0 adapter입니다. `PostgreSQL`, Streamable HTTP, 실제 Langfuse trace 전송은 아직 후속 작업입니다.
+테스트 기본 transport는 같은 프로세스의 contract dispatcher이며, Compose는 FastMCP Streamable HTTP 경로를 설정합니다. `PostgreSQL`은 선택형 repository입니다. 실제 외부 배포와 Langfuse 계정 연결은 팀 환경에서 별도 검증합니다.
 
 ### P1 후속 후보
 
@@ -36,15 +36,15 @@ AI 코딩 에이전트(Claude Code, Codex, Cursor 등)가 이 저장소에서 �
 
 ### LLM이 담당하는 일
 
-- 고객 자연어 의도 분류
+- 고객 자연어의 복합 의도와 지원 필요도 판단
 - 명시적 감정 신호 구조화
 - 문제 식별과 추가 정보 필요 여부 판단
-- 필요한 MCP 도구 후보 제시
+- 필요한 읽기 전용 MCP 도구 선택과 결과에 따른 최대 1회 후속 판단
 - 승인된 결과의 자연어 표현
 
 ### LLM이 담당하지 않는 일
 
-- 힌트 강도 최종 결정
+- 승인되지 않은 힌트 강도/본문의 임의 확정
 - 남은 시간·진도율 계산
 - 세션·팀 권한 검증
 - `AnswerVault` 직접 조회
@@ -52,18 +52,16 @@ AI 코딩 에이전트(Claude Code, Codex, Cursor 등)가 이 저장소에서 �
 - 장비 이상을 임의로 해결했다고 판단
 - 직원 호출 여부의 최종 결정
 
-세션 상태, 진도, 힌트 강도, 스포일러 차단, 직원 호출, 권한 검증은 코드와 MCP가 최종 결정합니다.
+LLM은 `STANDARD/STRONG/ANSWER` 지원 필요도를 맥락상 판단한다. 코드는 이를 승인된 WEAK/STRONG 콘텐츠 경계에 매핑하고 세션 상태, 진도, 스포일러 차단, 직원 호출의 실행 권한을 강제한다. `15분/50%`와 재요청 자동 STRONG 승격은 팀 미확정이다. 실제 LLM 미설정 시 baseline으로 조용히 대체하지 않는다.
 
 ## MCP 작업 경로
 
 - 운영 도구: `mcp_server/tools/`
 - 서버 등록: `mcp_server/server.py`
 - Runtime Adapter: `mcp_server/adapters/`
-- 실험·참고 코드: `mcp_server/tools_PJH/`
+새 운영 도구는 `mcp_server/tools/`에 작성합니다. 서버 등록과 공통 검증은 `mcp_server/server.py` 및 `mcp_server/contract_dispatch.py`에서 확인합니다.
 
-새 운영 도구는 기본적으로 `mcp_server/tools/`에 작성합니다. `tools_PJH/`의 코드는 운영 경로로 직접 import하지 않습니다.
-
-MCP 도구명과 입력·출력 schema는 `docs/specs/mcp-data-contract.md`와 실제 등록 코드가 일치해야 합니다. 이름을 변경할 때 문서, FastAPI adapter, MCP server registration, 테스트를 함께 수정합니다.
+MCP 도구명과 입력·출력 schema의 현재 정본은 `mcp_server/server.py`, `mcp_server/schemas.py`, `mcp_server/contract_dispatch.py`와 관련 테스트입니다. Draft 계약 문서를 현재 구현으로 오인하지 않습니다. 이름을 변경할 때 등록 코드, FastAPI adapter, 테스트를 함께 수정합니다.
 
 ## 세션·권한·상태 검증 규칙
 
@@ -130,7 +128,7 @@ RAG와 LangGraph는 이 프로젝트에서 사용하지 않습니다. QR 입장,
 - `README.md`: 팀 실행·협업 안내
 - `docs/RUN_NOW.md`: 로컬 실행 절차
 - `docs/STATUS.md`: 구현됨·검증됨·미검증 구분
-- `docs/specs/mcp-data-contract.md`: 공통 계약과 acceptance criteria
+- `mcp_server/server.py`, `mcp_server/schemas.py`: MCP 도구 등록과 계약
 - `docs/TESTING.md`: 검증 명령과 통합 테스트 순서
 - `docs/DEPLOYMENT.md`: Google Cloud Run과 Azure Container Apps 선택지
 - `EVAL_REPORT.md`: 평가 실행 metadata와 개선 전후 결과

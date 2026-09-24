@@ -8,7 +8,7 @@ import uuid
 
 from backend.repositories.memory import MemoryRepository
 from backend.repositories.protocol import RuntimeRepository
-from backend.schemas import ConversationTurn, HintEvent, SessionState
+from backend.schemas import ConversationTurn, HintEvent, MasterRequestReason, SessionState
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +30,39 @@ def _build_default_repository() -> RuntimeRepository:
 
 
 _DEFAULT_REPOSITORY = _build_default_repository()
+
+
+def _normalize_legacy_master_row(item: dict) -> dict:
+    """기존 자유문자열 reason을 파괴하지 않고 읽기 호환 형태로 변환한다.
+
+    값의 일부 문자열을 추측해 다른 enum으로 바꾸지 않는다. 정확한 enum prefix만
+    인식하고, 그 외 값은 UNKNOWN으로 표시하면서 원문 의미를 summary에 보존한다.
+    """
+    row = dict(item)
+    raw_reason = str(row.get("reason", "") or "")
+    raw_summary = row.get("summary")
+    known = {reason.value for reason in MasterRequestReason}
+    legacy_unmapped = bool(row.get("legacy_reason_unmapped", False))
+
+    if raw_reason in known:
+        reason = raw_reason
+        summary = str(raw_summary or raw_reason)
+    elif ":" in raw_reason and raw_reason.split(":", 1)[0] in known:
+        reason, legacy_summary = raw_reason.split(":", 1)
+        summary = str(raw_summary or legacy_summary or reason)
+    else:
+        reason = MasterRequestReason.UNKNOWN.value
+        summary = str(raw_summary or raw_reason or "UNKNOWN")
+        legacy_unmapped = True
+
+    row["reason"] = reason
+    row["summary"] = summary[:300]
+    row["legacy_reason_unmapped"] = legacy_unmapped
+    row.setdefault("deduplicated", False)
+    row.setdefault("operator_id", None)
+    row.setdefault("note", "")
+    row.setdefault("updated_at", None)
+    return row
 
 
 class LocalRuntime:
@@ -151,20 +184,37 @@ class LocalRuntime:
         team_id: str,
         reason: str,
         idempotency_key: str | None = None,
+        *,
+        summary: str | None = None,
     ) -> dict:
-        # 수정 사유: 세션이 없거나 다른 팀의 세션이면 잘못된 운영 요청을 저장하지 않는다.
+        # 세션/팀 검증 후에만 운영 큐를 변경한다. 자유문자열 reason은 substring으로
+        # 추측하지 않고 UNKNOWN으로 보존하며 원래 의미는 summary에 남긴다.
         session = self.get_game_session(session_id)
         if session.team_id != team_id:
             raise PermissionError("TEAM_SESSION_MISMATCH")
-        payload = {"session_id": session_id, "team_id": team_id, "reason": reason}
+
+        known = {value.value for value in MasterRequestReason}
+        raw_reason = str(reason)
+        mapped_reason = raw_reason if raw_reason in known else MasterRequestReason.UNKNOWN.value
+        safe_summary = str(summary if summary is not None else raw_reason).strip()[:300]
+        if not safe_summary:
+            safe_summary = mapped_reason
+        payload = {
+            "session_id": session_id,
+            "team_id": team_id,
+            "reason": mapped_reason,
+            "summary": safe_summary,
+            "legacy_reason_unmapped": raw_reason not in known,
+        }
         if idempotency_key:
             stored = self.repository.get_idempotency(idempotency_key)
             if stored is not None:
                 stored_payload, stored_result = stored
                 if stored_payload != payload:
                     raise ValueError("IDEMPOTENCY_CONFLICT")
-                stored_result["deduplicated"] = True
-                return stored_result
+                result = _normalize_legacy_master_row(stored_result)
+                result["deduplicated"] = True
+                return result
         item = {
             "request_id": str(uuid.uuid4()),
             **payload,
@@ -175,7 +225,7 @@ class LocalRuntime:
         self.repository.save_master_request(item)
         if idempotency_key:
             self.repository.save_idempotency(idempotency_key, payload, item)
-        return item
+        return _normalize_legacy_master_row(item)
 
     def report_equipment_issue(
         self,
@@ -184,7 +234,13 @@ class LocalRuntime:
         detail: str,
         idempotency_key: str | None = None,
     ) -> dict:
-        return self.request_game_master(session_id, team_id, f"EQUIPMENT_ISSUE:{detail}", idempotency_key)
+        return self.request_game_master(
+            session_id,
+            team_id,
+            MasterRequestReason.PROP_ERROR.value,
+            idempotency_key,
+            summary=detail,
+        )
 
     def update_master_request(
         self,
@@ -208,6 +264,7 @@ class LocalRuntime:
         item = self.repository.get_master_request(request_id)
         if item is None:
             raise KeyError(f"MASTER_REQUEST_NOT_FOUND:{request_id}")
+        item = _normalize_legacy_master_row(item)
         allowed = {
             "OPEN": {"ACKNOWLEDGED", "CANCELED"},
             "ACKNOWLEDGED": {"RESOLVED", "CANCELED"},
@@ -230,7 +287,7 @@ class LocalRuntime:
         return item
 
     def get_master_requests(self) -> list[dict]:
-        return self.repository.list_master_requests()
+        return [_normalize_legacy_master_row(item) for item in self.repository.list_master_requests()]
 
     def get_master_requests_for_session(
         self, session_id: str, team_id: str, limit: int = 5
@@ -243,7 +300,7 @@ class LocalRuntime:
         if session.team_id != team_id:
             raise PermissionError("TEAM_SESSION_MISMATCH")
         items = [
-            dict(item)
+            _normalize_legacy_master_row(item)
             for item in self.repository.list_master_requests()
             if item.get("session_id") == session_id and item.get("team_id") == team_id
         ]

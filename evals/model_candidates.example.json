@@ -1,0 +1,48 @@
+{
+  "version": "candidate-slots-v2",
+  "verified_at": "2026-09-24",
+  "note": "후보 ID는 OpenRouter 공개 모델 페이지 기준으로 고정한다. 실제 공식 테스트 직전 /api/v1/endpoints/zdr 결과와 가격 상한을 다시 검사하며, 미통과 모델은 inference 전에 차단한다.",
+  "required_slots": 4,
+  "excluded_from_current_selection": [
+    "Qwen 3.8 (사용자 결정으로 탈락)"
+  ],
+  "candidates": [
+    {
+      "slot": 1,
+      "label": "Gemini 3.1 Flash Lite",
+      "exact_model_id": "google/gemini-3.1-flash-lite",
+      "listed_input_usd_per_million": 0.25,
+      "listed_output_usd_per_million": 1.5,
+      "selection_reason": "저비용·저지연 계열의 기준 후보. tool calling/structured output 지원.",
+      "status": "VERIFY_ZDR_AND_PRICE_AT_RUNTIME"
+    },
+    {
+      "slot": 2,
+      "label": "Gemini 3 Flash Preview",
+      "exact_model_id": "google/gemini-3-flash-preview",
+      "listed_input_usd_per_million": 0.5,
+      "listed_output_usd_per_million": 3.0,
+      "selection_reason": "Flash Lite보다 상위 품질 후보로 정책·맥락·추론 차이를 비교.",
+      "status": "VERIFY_ZDR_AND_PRICE_AT_RUNTIME"
+    },
+    {
+      "slot": 3,
+      "label": "DeepSeek V3.2",
+      "exact_model_id": "deepseek/deepseek-v3.2",
+      "listed_input_usd_per_million": 0.2088,
+      "listed_output_usd_per_million": 0.3096,
+      "selection_reason": "매우 낮은 가격과 agentic/tool-use 성향을 비교하는 가성비 후보.",
+      "status": "VERIFY_ZDR_AND_PRICE_AT_RUNTIME"
+    },
+    {
+      "slot": 4,
+      "label": "GPT-5.4 Mini",
+      "exact_model_id": "openai/gpt-5.4-mini",
+      "listed_input_usd_per_million": 0.75,
+      "listed_output_usd_per_million": 4.5,
+      "selection_reason": "instruction following·multi-step reasoning·tool use의 상위 비교 기준이면서 설정한 가격 상한 안에 들어오는 후보.",
+      "status": "VERIFY_ZDR_AND_PRICE_AT_RUNTIME"
+    }
+  ],
+  "pricing_warning": "listed 가격은 후보 선정 참고 스냅샷이다. 실제 ZDR endpoint 가격과 청구액은 실행 직전/실행 중 OpenRouter 응답을 기준으로 한다."
+}

@@ -1,80 +1,61 @@
 # Architecture
 
-## 현재 처리 흐름
+> 2026-09-23 운영 보조 통합 메모: 현재 Agent 실행 경로는 [PROJECT_PLAN.md](./PROJECT_PLAN.md)의 세션 preflight → Domain Skill/최근 대화 → LLM INITIAL → 선택 조회 및 최대 1회 FOLLOWUP → 코드/MCP 실행이다. 아래 기존 도식 중 고정 조회 순서·코드의 의미상 힌트 강도 판정 설명은 과거 힌트 전용 설계 기록으로 읽는다. 실제 호출 관계는 `backend/services/agent_orchestrator.py`와 테스트가 우선한다.
+
+## P0 구조
 
 ```text
-Customer UI
-   ↓
-FastAPI /api/agent
-   ↓
-Code Guard 1
-(session/team/current puzzle/spoiler/session closed)
-   ↓
-Context Builder
-(minimum session context + recent turns + Domain Skill v2026-09-22.v3)
-   ↓
-LLM INITIAL decision
-(intent(s) + lookup_tools + clarification + actions + support_need + self-reported skill rule ids)
-   │
-   ├─ 조회 불필요 → 바로 Code Guard 2
-   │
-   └─ 조회 필요 → read-only MCP lookup
-                  (hint history / current session master-request status)
-                        ↓
-                  LLM FOLLOWUP_AFTER_TOOLS
-                  (tool result를 보고 최종 action/question 결정)
-                        ↓
-Code Guard 2
-(allowed action / approved hint / AnswerVault / idempotency / state transition)
-   ↓
-Side-effect MCP tools
-   ↓
-Verified execution result + AgentResponse + conversation history
+Customer / GameMaster UI
+          |
+          +-- text input ------------------+
+          +-- voice submit → STT Adapter --+
+                                           v
+       FastAPI
+          |
+          +-- services/llm.py
+          |      └─ STT 결과 텍스트의 의도/감정 구조화
+          |
+          +-- agent_orchestrator.py
+          |
+          v
+      MCP Client
+          |
+          v
+     MCP Tool Layer
+          |
+          v
+   RuntimeRepository
+        ├─ MemoryRepository (P0 기본)
+        └─ PostgresRepository (선택형 B안 1차)
 ```
 
-## LLM이 실제로 결정하는 것
+## STT 입력 경계
 
-- 표현과 최근 대화를 이용한 요청 의미·복합성
-- 필요한 정보가 DB/MCP 조회인지 고객 확인 질문인지
-- `get_hint_history`, `get_master_request_status` 중 필요한 읽기 조회
-- 조회 결과를 본 뒤 힌트/직원 요청/장비 요청/질문/정보 안내 중 후속 대응
-- `STANDARD/STRONG/ANSWER` 지원 필요도
-- 직원 전달용 `facts / attempts / unknowns`
-- 자신의 판단에 사용했다고 보고하는 Domain Skill rule id
+- STT는 음성 파일 또는 브라우저 녹음 결과를 텍스트로 변환하는 입력 Adapter다.
+- STT는 의도, 감정, 힌트 강도, 정답을 판단하지 않는다. 변환된 텍스트만 `AgentRequest.message`로 전달한다.
+- MVP는 고객이 음성 요청 버튼을 눌러 제출하는 방식이며 상시 마이크 청취·선제 개입은 범위에서 제외한다.
+- 빈 전사, 낮은 신뢰도, 변환 실패는 LLM/MCP 판정 전에 재입력 요청으로 종료한다.
+- Provider와 모델은 `services/stt.py` 또는 동등한 Adapter 경계 뒤에 둔다. 특정 STT 모델을 현재 확정하지 않는다.
 
-`applied_skill_rules`는 LLM 자기보고 값이다. 존재하는 rule id인지 필터링할 수는 있지만, 실제 규칙을 올바르게 적용했는지는 평가에서 별도로 판정한다.
+`backend/services/mcp_transport.py`는 기본 InProcess transport와 선택 Streamable HTTP transport를 제공합니다. Docker Compose는 FastAPI와 FastMCP를 별도 서비스로 띄워 HTTP 경로를 사용하고, 단위 테스트는 동일 contract dispatcher를 거치는 in-process 경로를 씁니다. 실제 배포 환경의 네트워크·권한 설정은 별도 검증 대상입니다.
 
-## 코드가 결정하거나 강제하는 것
+## 외부 Runtime 확장
 
-- 세션·팀·테마·현재 퍼즐 경계
-- LLM 출력 스키마와 허용 action/lookup
-- 승인된 `WEAK/STRONG` 힌트만 조회하는 콘텐츠 경계
-- 정답 AnswerVault/동의 경계
-- 시간 연장 자동 적용 금지, 고객 진도 직접 변경 금지
-- idempotency, 운영 요청 상태 전이, 조회/승인 힌트 재시도 제한
-- 실제 도구 실행 성공 여부와 최종 응답의 구조적 일치
+```text
+MCP Tool
+  └─ Runtime Adapter
+       ├─ LocalRuntime    (P0)
+       └─ PostgreSQL Repository (선택형 저장소)
+```
 
-`support_need`의 도메인상 적절성은 코드가 재판정하지 않는다. `hint_policy.py`는 LLM 판단을 승인된 힌트 데이터 단계로 매핑할 뿐이며, 의미 품질은 사람이 정한 Domain Skill/평가셋으로 검증한다.
+외부 제품 Adapter는 확정된 연동 계약과 팀 우선순위가 생길 때 추가합니다. 현재 저장소에는 미연결 Adapter placeholder를 두지 않습니다.
 
-## Domain Skill 적용 경계
+프론트엔드는 하나의 React + TypeScript + Vite 앱에서 `/customer`와 `/game-master`를 제공하고 Vercel에 정적 배포합니다.
+<!-- 통합 메모: temp-git의 정적 HTML 화면 대신 현재 확정된 단일 Vite 앱을 기준으로 설명합니다. -->
 
-- `skills/SKILL.md`: 현장 경험/과거 기준 원문
-- `skills/domain_policy.json`: 실제 LLM 입력용 compact policy
-- 현재 적용 버전: `2026-09-22.v3`
-- 위치 혼동은 즉시 강한 지원으로 확대하지 않는 참고 기준을 사용
-- 문제 번호/전체 문제 수는 내부 정보로 유지하고 고객 안내에 직접 노출하지 않음
-- 숫자 기반 힌트 강도 규칙과 재요청 자동 STRONG은 미확정으로 유지
+## DB
 
-## 고정 조회를 줄인 이유
-
-세션·현재 퍼즐·최근 대화는 최소 맥락으로 항상 제공한다. 반면 힌트 이력이나 기존 직원 요청 상태는 모든 질문에 필요하지 않으므로 LLM이 `lookup_tools`로 선택했을 때만 조회한다. 조회가 발생하면 최대 한 번의 후속 LLM 판단을 수행해 반복 루프를 만들지 않는다.
-
-## 요청 단위 관측
-
-초기 LLM 판단, 조회 도구, 후속 LLM 판단, 승인 힌트/운영 요청 처리, 최종 응답은 같은 `request_id`와 `session_id`로 연결한다. LLM 호출에는 Prompt/Skill 버전, 모델, stage, latency, token, provider가 제공한 cost를 기록한다. 비용이 미제공이면 `None/NOT_PROVIDED`로 유지하며 0으로 바꾸지 않는다.
-
-## 대표 분기
-
-- `아까 직원 불렀는데 아직 안 왔어요.` → 직원 요청 상태 조회 → 결과를 본 뒤 중복 접수/안내를 다시 판단
-- `아까 힌트대로 했는데 안 열려요.` → 같은 퍼즐 힌트 이력 조회 → 풀이 어려움/사용법/장비 가능성을 구분하기 위한 질문 또는 후속 행동 판단
-- `힌트도 필요하고 자물쇠가 반응하지 않아요.` → 독립 요청인지 동일 문제의 다른 해석인지 불명확하면 실행 전에 질문 가능
+강사 scaffold에는 PostgreSQL 서비스가 기본 포함되어 있습니다.
+현재 P0 기본값은 `MemoryRepository`이며, `RUNTIME_REPOSITORY=postgres`로
+`PostgresRepository`를 선택할 수 있습니다. 실제 DB 연결·migration·복구·다중
+인스턴스 운영은 아직 외부 검증이 필요한 후속 단계입니다.

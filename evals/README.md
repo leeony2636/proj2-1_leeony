@@ -1,22 +1,15 @@
-# 평가 자산
+# Evaluation workflow
 
-## 현재 파일
+Use these as the single evaluation entry points:
 
-- `dataset.jsonl`: 정상/경계/실패 유도 30건 합성 seed. 사람 Ground Truth가 아니다.
-- `run_llm_eval.py`: 전체 서비스 흐름 평가 실행기. INITIAL → 선택 조회 → FOLLOWUP → 격리 처리 → 최종 안내를 기록한다.
-- `run_model_contract_eval.py`: 실제 모델의 정규화 전 계약 준수와 정규화 후 결과를 분리 측정한다.
-- `evaluation_runtime.py`: 운영 데이터와 분리된 MemoryRuntime 평가 환경.
+- `TEST_POLICY.md` and `model_selection_policy.json`: fixed cases, ZDR and cost gates.
+- `dataset.jsonl` and `core30_quality_contract.json`: current input set and evaluator-only automatic checks.
+- `quality_contract_approval.json`: team sign-off; starts pending and must be completed after review.
+- `MODEL_REVIEW_RUBRIC.md`: human score criteria for the six semantic axes.
+- `run_model_selection.py`: gated four-model evaluation, traces and numeric Langfuse scores.
+- `run_llm_eval.py`: isolated service-flow run. JSON output under `evals/results/live_runs/` is temporary working material and is Git-ignored.
+- `score_reviewed_results.py`: aggregate human-reviewed cases and optionally publish scores.
 
-## 평가 원칙
+The runner writes a shareable case metrics CSV under `evals/results/model_selection_csv/`. CSV contains run/model/case identifiers, trace IDs, axis statuses, tokens, cost and latency; it excludes customer utterances, model responses, hints, answers and reviewer prose. Langfuse stores numeric scores on the matching trace. Keep the CSV and Langfuse run as the durable comparison record; do not commit raw working JSON.
 
-기술 검증과 실제 도메인 품질 평가를 분리한다.
-
-- 합성 100 payload 테스트는 **정규화 기술 테스트**다.
-- 기존 30건 seed는 runner/흐름 smoke에 사용할 수 있지만 사람 판정 품질 점수로 집계하지 않는다.
-- 실제 품질 평가는 사람이 입력·정답·판정 이유·판정자를 확정한 Dataset으로 수행한다.
-- 실패 사례도 결과 파일에 남기며 성공 사례만 집계하지 않는다.
-- 질문 적절성, 직원 전달 사실성, Skill 규칙의 올바른 적용, 최종 안내의 의미 일치는 사람 검토가 필요하다.
-
-## 현재 30건 seed
-
-구성은 정상 10 / 경계 12 / 실패 8이다. 일부 행은 현재 미확정으로 분리한 과거 숫자/재요청 규칙을 기대값으로 포함하므로, 그대로 현재 정책 Ground Truth로 사용하지 않는다.
+This dataset is not established as a fully approved domain ground truth until the team completes the hash-bound sign-off. Offline baseline is a plumbing smoke only, not a model-quality result. See `docs/EVALUATION.md` for the exact run and review steps.

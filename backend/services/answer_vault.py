@@ -19,14 +19,23 @@ _ANSWER_OFFERS: dict[str, dict] = {}
 _OFFER_TTL = timedelta(minutes=10)
 
 
+def _get_owned_session(session_id: str, team_id: str) -> SessionState:
+    """기존 AnswerVault 공개 오류 계약을 유지하며 MCP 소유권 검증을 사용한다."""
+    try:
+        data = mcp.get_agent_session(session_id, team_id)
+    except PermissionError as exc:
+        if str(exc) == "TEAM_SESSION_MISMATCH":
+            raise ValueError("TEAM_SESSION_MISMATCH") from exc
+        raise
+    return SessionState.model_validate(data)
+
+
 def _validate_strong_hint(session_id: str, team_id: str, puzzle_id: str) -> SessionState:
-    session = SessionState.model_validate(mcp.get_session(session_id))
-    if session.team_id != team_id:
-        raise ValueError("TEAM_SESSION_MISMATCH")
+    session = _get_owned_session(session_id, team_id)
     if session.current_puzzle_id != puzzle_id:
         raise ValueError("ANSWER_REVEAL_CURRENT_PUZZLE_ONLY")
 
-    history = mcp.get_history(session_id, puzzle_id)
+    history = mcp.get_history(session_id, team_id, puzzle_id)
     if not any(event.get("strength") == HintStrength.STRONG.value for event in history):
         raise PermissionError("STRONG_HINT_REQUIRED_BEFORE_ANSWER_CONFIRMATION")
     return session
@@ -89,15 +98,13 @@ def confirm_answer(session_id: str, team_id: str, puzzle_id: str, offer_id: str)
 
 
 def reveal_answer(session_id: str, team_id: str, puzzle_id: str) -> dict:
-    session = SessionState.model_validate(mcp.get_session(session_id))
-    if session.team_id != team_id:
-        raise ValueError("TEAM_SESSION_MISMATCH")
+    session = _get_owned_session(session_id, team_id)
 
     # 현재 퍼즐이 아닌 정답을 미리 보는 것을 차단한다.
     if session.current_puzzle_id != puzzle_id:
         raise ValueError("ANSWER_REVEAL_CURRENT_PUZZLE_ONLY")
 
-    history = mcp.get_history(session_id, puzzle_id)
+    history = mcp.get_history(session_id, team_id, puzzle_id)
     has_strong = any(
         event.get("strength") == HintStrength.STRONG.value
         for event in history

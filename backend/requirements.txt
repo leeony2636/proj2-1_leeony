@@ -3,7 +3,11 @@ uvicorn[standard]>=0.32
 pydantic>=2.9
 python-dotenv>=1.0
 openai>=1.60
-langfuse>=2.50
-mcp>=1.29
+langfuse>=4.10,<5
+# server.py가 FastMCP 1.x API를 사용하므로 2.x 자동 업그레이드로 인한 import 파손을 막는다.
+mcp>=1.29,<2
+# Streamable HTTP client의 명시적 timeout 설정에 직접 사용한다.
+httpx>=0.27,<1
+qrcode>=8.0
 python-multipart>=0.0.20
 psycopg[binary]>=3.2  # B안 PostgreSQL Repository용 동기 드라이버

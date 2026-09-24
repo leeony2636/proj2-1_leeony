@@ -81,3 +81,4 @@ def filter_reported_skill_rule_ids(rule_ids: list[str]) -> list[str]:
 # 기존 호출부 호환용 alias. 이름과 달리 의미 준수 검증은 하지 않는다.
 def validate_applied_rule_ids(rule_ids: list[str]) -> list[str]:
     return filter_reported_skill_rule_ids(rule_ids)
+

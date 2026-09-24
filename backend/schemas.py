@@ -46,6 +46,15 @@ class SupportNeed(str, Enum):
     ANSWER = "ANSWER"
 
 
+
+
+class MasterRequestReason(str, Enum):
+    PROP_ERROR = "PROP_ERROR"
+    SETUP_ERROR = "SETUP_ERROR"
+    DIRECT_REQUEST = "DIRECT_REQUEST"
+    ABNORMAL_STATE = "ABNORMAL_STATE"
+    UNKNOWN = "UNKNOWN"
+
 class MasterRequestStatus(str, Enum):
     OPEN = "OPEN"
     ACKNOWLEDGED = "ACKNOWLEDGED"

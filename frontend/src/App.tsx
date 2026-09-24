@@ -66,8 +66,9 @@ function Customer() {
     }
   }
 
-  return <Shell role="힌트가 필요할 때 질문하세요">
-    <p>현재 세션의 퍼즐 상황에 맞춰 단계적인 힌트를 제공합니다.</p>
+  return <Shell role="도움이 필요할 때 말씀해 주세요">
+    {/* 수정 사유: 고객 진입점은 힌트 전용이 아니라 장비 신고·직원 호출도 받는다. */}
+    <p>현재 퍼즐 힌트, 장비 이상 신고, 직원 호출을 한곳에서 요청할 수 있습니다.</p>
     <label>
       팀 식별자
       <input aria-label="team id" value={teamId} onChange={(event) => setTeamId(event.target.value)} />
@@ -76,15 +77,18 @@ function Customer() {
       {starting ? "세션 시작 중..." : session ? "새 세션 시작" : "세션 시작"}
     </button>
     {session && <p role="status">현재 세션: {session.session_id} · 퍼즐: {session.current_puzzle_id}</p>}
-    <textarea aria-label="hint request" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="예: 이 퍼즐의 다음 단계를 알려주세요" />
-    <button onClick={requestHint} disabled={!session || !message.trim()}>힌트 요청</button>
+    <textarea aria-label="customer request" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="예: 힌트가 필요해요 / 장치가 안 열려요 / 직원을 불러 주세요" />
+    <button onClick={requestHint} disabled={!session || !message.trim()}>요청 보내기</button>
+    {response?.customer_message && <p role="status">{response.customer_message}</p>}
     {response?.hint_text && <p role="status">{response.hint_text}</p>}
+    {/* 수정 사유: 복합 요청 응답에서는 status가 MULTI_ACTION이어도 정답 동의가 필요할 수 있다. */}
     {response?.requires_confirmation && <button onClick={confirmAnswer} disabled={confirming}>
       {confirming ? "정답 확인 중..." : "정답 보기"}
     </button>}
     {error && <p role="alert">{error}</p>}
   </Shell>;
 }
+// SMUS002: 제공된 Escape Ops 데모를 기존 게임마스터 라우트에 연결한다.
 function GameMaster() {
   const api = createAgentApi();
   const [requests, setRequests] = useState<MasterRequest[]>([]);
@@ -104,9 +108,14 @@ function GameMaster() {
         if (active) setQueueError(cause instanceof Error ? cause.message : "요청 큐를 불러오지 못했습니다.");
       }
     }
+
     loadRequests();
+    // 수정 사유: P0에서는 WebSocket보다 단순 polling으로 운영 요청 갱신을 검증한다.
     const timer = window.setInterval(loadRequests, 5000);
-    return () => { active = false; window.clearInterval(timer); };
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
   async function updateRequest(requestId: string, action: MasterAction) {
@@ -117,23 +126,34 @@ function GameMaster() {
         note: action === "acknowledge" ? "게임마스터 확인" : action === "resolve" ? "현장 처리 완료" : "요청 취소",
         idempotency_key: `ui:${requestId}:${action}`,
       });
-      setRequests((await api.getMasterRequests()).requests);
+      const result = await api.getMasterRequests();
+      setRequests(result.requests);
       setQueueError(null);
     } catch (cause) {
       setQueueError(cause instanceof Error ? cause.message : "요청 상태 변경에 실패했습니다.");
-    } finally { setUpdating(null); }
+    } finally {
+      setUpdating(null);
+    }
   }
 
-  return <Shell role="게임마스터 요청 큐">
-    <p>Agent가 처리하지 않고 직원 확인이 필요하다고 판단한 요청만 표시합니다.</p>
-    {queueError && <p role="alert">{queueError}</p>}
-    {!queueError && requests.length === 0 && <p>현재 운영 요청이 없습니다.</p>}
-    {requests.slice().reverse().map((item) => <article className={`master-request ${item.status.toLowerCase()}`} key={item.request_id}>
-      <div><b>{item.status}</b><small>{item.team_id} · {item.reason}</small></div>
-      {item.status === "OPEN" && <button disabled={updating === item.request_id} onClick={() => updateRequest(item.request_id, "acknowledge")}>확인</button>}
-      {item.status === "ACKNOWLEDGED" && <button disabled={updating === item.request_id} onClick={() => updateRequest(item.request_id, "resolve")}>해결</button>}
-      {(item.status === "OPEN" || item.status === "ACKNOWLEDGED") && <button disabled={updating === item.request_id} onClick={() => updateRequest(item.request_id, "cancel")}>취소</button>}
-    </article>)}
-  </Shell>;
+  return <main className="ops-page">
+    <iframe
+      className="ops-frame"
+      src="/escape-ops/index.html"
+      title="ESCAPE OPS 게임마스터 관제 화면"
+    />
+    <aside className="master-live-panel" aria-label="실시간 게임마스터 요청">
+      <div className="master-live-header"><strong>LIVE REQUESTS</strong><span>{requests.filter((item) => item.status === "OPEN").length} 대기</span></div>
+      {queueError && <p className="master-live-error" role="alert">{queueError}</p>}
+      {!queueError && requests.length === 0 && <p className="master-live-empty">현재 운영 요청이 없습니다.</p>}
+      {requests.slice(-5).reverse().map((item) => <article className={`master-request ${item.status.toLowerCase()}`} key={item.request_id}>
+        <div><b>{item.status}</b><small>{item.team_id} · {item.reason}</small></div>
+        {item.status === "OPEN" && <button disabled={updating === item.request_id} onClick={() => updateRequest(item.request_id, "acknowledge")}>확인</button>}
+        {item.status === "ACKNOWLEDGED" && <button disabled={updating === item.request_id} onClick={() => updateRequest(item.request_id, "resolve")}>해결</button>}
+        {(item.status === "OPEN" || item.status === "ACKNOWLEDGED") && <button className="cancel-request" disabled={updating === item.request_id} onClick={() => updateRequest(item.request_id, "cancel")}>취소</button>}
+      </article>)}
+    </aside>
+    <Link className="ops-customer-link" to="/customer">고객 화면으로 이동</Link>
+  </main>;
 }
 export default function App() { return <Routes><Route path="/" element={<Navigate to="/customer" replace />} /><Route path="/customer" element={<Customer />} /><Route path="/game-master" element={<GameMaster />} /></Routes>; }

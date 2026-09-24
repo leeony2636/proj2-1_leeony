@@ -73,3 +73,4 @@ def test_recent_turns_are_added_to_next_llm_context(monkeypatch):
 
     assert seen_turn_counts[0] == 0
     assert seen_turn_counts[1] >= 2  # 첫 요청의 user/assistant turn
+
