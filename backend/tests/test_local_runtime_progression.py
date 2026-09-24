@@ -37,3 +37,4 @@ def test_mark_last_puzzle_solved_closes_session():
     assert updated.current_puzzle_id is None
     assert updated.solved_puzzles == updated.total_puzzles
     assert stored == updated
+

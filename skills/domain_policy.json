@@ -69,21 +69,29 @@
       "statement": "단순히 어느 서랍·장치·위치인지 찾지 못한 상황은 강한 감정 표현이 있더라도 곧바로 강한 지원으로 확대하지 않는다. 위치 파악 문제만 확인되면 승인된 약한 힌트 수준의 위치 안내를 우선 고려하고, 풀이 실패·반복 시도·장비 이상이 섞였는지는 별도로 판단한다.",
       "policy_status": "LLM_GUIDANCE",
       "visibility": "INTERNAL_ONLY"
+    },
+    {
+      "id": "PROGRESS_INFERENCE_THEN_CLARIFY",
+      "statement": "진도는 우선 손님의 자연어 발화를 테마의 문제 내용과 대조해 스스로 추정한다. 그래도 진도 표현이 모호하면 짐작으로 확정하지 않고 '마지막으로 푼 문제가 무엇인지'를 직접 확인 질문으로 던진다.",
+      "policy_status": "LLM_GUIDANCE",
+      "visibility": "INTERNAL_ONLY"
     }
   ],
   "unconfirmed_policies": [
     {
       "id": "NUMERIC_HINT_STRENGTH_RULE",
       "statement": "남은 시간 15분/남은 문제 비율 50% 같은 숫자 기준으로 힌트 강도를 자동 결정하는 규칙",
-      "status": "TEAM_DECISION_REQUIRED",
-      "policy_status": "TEAM_DECISION_REQUIRED",
+      "status": "DECIDED_NOT_ADOPTED",
+      "policy_status": "DECIDED_NOT_ADOPTED",
+      "decision_note": "팀 검토 결과 의미 판단 중심(A안)으로 확정, 숫자 규칙은 채택하지 않음. 자동 실행 기준으로 사용하지 않기 위해 unconfirmed_policies 배열에 유지.",
       "visibility": "INTERNAL_ONLY"
     },
     {
       "id": "AUTO_REREQUEST_ESCALATION",
       "statement": "짧은 시간 내 같은 문제 재요청이면 자동으로 STRONG으로 승격하는 규칙",
-      "status": "TEAM_DECISION_REQUIRED",
-      "policy_status": "TEAM_DECISION_REQUIRED",
+      "status": "DECIDED_NOT_ADOPTED",
+      "policy_status": "DECIDED_NOT_ADOPTED",
+      "decision_note": "팀 검토 결과 채택하지 않음. 재요청은 LLM이 이력 조회 후 의미 판단하는 재료로만 사용.",
       "visibility": "INTERNAL_ONLY"
     }
   ],
@@ -96,3 +104,4 @@
     "applied_skill_rules": "LLM이 자신의 판단에 적용했다고 보고한 rule id의 자기보고 목록이다. rule id 존재 확인은 가능하지만 실제 규칙 준수 여부를 증명하지 않으며, 준수 여부는 별도 평가에서 판정한다."
   }
 }
+

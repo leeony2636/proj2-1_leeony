@@ -100,6 +100,34 @@ def test_master_status_lookup_changes_followup_without_duplicate_request(monkeyp
     assert same_session[0]["request_id"] == existing["request_id"]
 
 
+def test_lookup_failure_returns_safe_error_without_side_effect(monkeypatch):
+    session = agent_orchestrator.mcp.create_session("last_train", "team-lookup-error")
+
+    def fake_initial(message, context, **_):
+        return _intent(
+            intent=IntentType.MASTER_REQUEST,
+            lookup_tools=[LookupToolType.GET_MASTER_REQUEST_STATUS],
+            reason="기존 요청 확인 필요",
+        )
+
+    def failed_lookup(*args, **kwargs):
+        raise TimeoutError("temporary lookup failure")
+
+    # 조회 실패를 추측에 기반한 신규 직원 호출로 바꾸면 중복 요청이 생긴다.
+    monkeypatch.setattr(agent_orchestrator, "analyze_user_request", fake_initial)
+    monkeypatch.setattr(agent_orchestrator.mcp, "master_request_status", failed_lookup)
+    response = agent_orchestrator.handle_agent_request(
+        AgentRequest(session_id=session["session_id"], team_id="team-lookup-error", message="아직 안 왔어요")
+    )
+
+    assert response.status == AgentStatus.ERROR
+    assert "LOOKUP_TOOL_FAILED" in response.reason_codes
+    assert response.completed_actions == []
+    assert agent_orchestrator.mcp.master_requests() == [] or all(
+        item["session_id"] != session["session_id"] for item in agent_orchestrator.mcp.master_requests()
+    )
+
+
 def test_hint_history_result_can_change_followup_to_clarification(monkeypatch):
     session = agent_orchestrator.mcp.create_session("last_train", "team-hint-followup")
     puzzle_id = session["current_puzzle_id"]
@@ -209,9 +237,10 @@ def test_staff_handoff_keeps_fact_attempt_unknown_separate(monkeypatch):
         session["session_id"], "team-staff-summary"
     )[0]
     assert response.status == AgentStatus.MASTER_REQUEST
-    assert "고객 사실:" in request_row["reason"]
-    assert "고객 시도:" in request_row["reason"]
-    assert "미확인:" in request_row["reason"]
+    assert request_row["reason"] == "PROP_ERROR"
+    assert "고객 사실:" in request_row["summary"]
+    assert "고객 시도:" in request_row["summary"]
+    assert "미확인:" in request_row["summary"]
     assert "LLM_REPORTED_SKILL_RULE:STAFF_HANDOFF_FACTS" in response.reason_codes
 
 
@@ -224,5 +253,7 @@ def test_master_request_status_is_session_and_team_scoped():
     a_rows = agent_orchestrator.mcp.master_request_status(a["session_id"], "team-scope-a")
     b_rows = agent_orchestrator.mcp.master_request_status(b["session_id"], "team-scope-b")
 
-    assert {row["reason"] for row in a_rows} == {"A"}
-    assert {row["reason"] for row in b_rows} == {"B"}
+    assert {row["reason"] for row in a_rows} == {"UNKNOWN"}
+    assert {row["summary"] for row in a_rows} == {"A"}
+    assert {row["reason"] for row in b_rows} == {"UNKNOWN"}
+    assert {row["summary"] for row in b_rows} == {"B"}

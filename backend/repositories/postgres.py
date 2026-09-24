@@ -161,7 +161,10 @@ class PostgresRepository:
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     request["request_id"], request["session_id"], request["team_id"],
-                    request["reason"], request["created_at"], request["status"],
+                    # 기존 단일 reason 컬럼과의 쓰기 호환. 물리 migration 전에는
+                    # ``ENUM:summary``로 저장하고 읽기 계층이 다시 분리한다.
+                    f"{request['reason']}:{request.get('summary', request['reason'])}",
+                    request["created_at"], request["status"],
                     request.get("operator_id"), request.get("note", ""), request.get("updated_at"),
                 ),
             )

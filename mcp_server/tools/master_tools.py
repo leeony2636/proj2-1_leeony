@@ -7,9 +7,16 @@ def request_game_master(
     session_id: str,
     team_id: str,
     reason: str,
+    summary: str,
     idempotency_key: str | None = None,
 ) -> dict:
-    return runtime.request_game_master(session_id, team_id, reason, idempotency_key)
+    return runtime.request_game_master(
+        session_id,
+        team_id,
+        reason,
+        idempotency_key,
+        summary=summary,
+    )
 
 
 def report_equipment_issue(

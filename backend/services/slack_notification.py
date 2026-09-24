@@ -21,3 +21,4 @@ class MockSlackNotificationAdapter:
 
     def send_master_request_notification(self, master_request: dict) -> None:
         self.sent_requests.append(dict(master_request))
+

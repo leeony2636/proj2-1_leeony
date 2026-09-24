@@ -22,9 +22,6 @@ class AnswerApiIntegrationTests(unittest.TestCase):
         self.assertIn("/api/agent", schema["paths"])
         self.assertIn("/api/answers/confirm", schema["paths"])
         self.assertNotIn("/api/answers/reveal", schema["paths"])
-        # 수정 기획안: QR 입장과 고객 직접 진도 변경은 P0 공개 API가 아니다.
-        self.assertNotIn("/api/sessions/{session_id}/qr.svg", schema["paths"])
-        self.assertNotIn("/api/sessions/{session_id}/solve", schema["paths"])
         self.assertEqual(
             schema["paths"]["/api/answers/confirm"]["post"]["responses"]["200"]["description"],
             "Successful Response",

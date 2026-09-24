@@ -1,0 +1,75 @@
+{
+  "version": "model-selection-core30-v2",
+  "purpose": "동일한 core-30과 동일 설정으로 OpenRouter 유료 후보 4개를 비교해 서비스 탑재 후보를 고른다.",
+  "provider": "openrouter",
+  "required_model_count": 4,
+  "required_case_count": 30,
+  "dataset": "evals/dataset.jsonl",
+  "dataset_sha256": "a30e5f66ded4ca2d6395e70ce88e20039bae6da68f3ca4cb0062826944720df1",
+  "quality_contract": "evals/core30_quality_contract.json",
+  "model_selection_total_budget_usd": 5.0,
+  "project_total_budget_reference_usd": 30.0,
+  "zdr_required": true,
+  "data_collection": "deny",
+  "allow_provider_model_fallback": false,
+  "fixed_generation_settings": {
+    "temperature": 0,
+    "max_output_tokens": 850
+  },
+  "quality_gate": {
+    "required_completed_cases": 30,
+    "required_case_passes": 30,
+    "max_hard_fails": 0,
+    "required_final_contract_rate": 1.0,
+    "budget_is_gate_after_quality": true,
+    "efficiency_metrics": [
+      "provider_call_count",
+      "input_tokens",
+      "output_tokens",
+      "reasoning_tokens",
+      "cached_tokens",
+      "total_tokens",
+      "latency_p50_ms",
+      "latency_p95_ms",
+      "provider_cost_usd"
+    ]
+  },
+  "anti_hardcoding": {
+    "agent_must_not_receive": [
+      "expected",
+      "service_expected",
+      "reviewer",
+      "quality_contract",
+      "case verdict"
+    ],
+    "forbid_case_id_branching": true,
+    "forbid_eval_utterance_literal_matching_in_runtime": true,
+    "baseline_is_comparison_only": true
+  },
+  "observability": {
+    "do_not_export_raw_customer_text": true,
+    "do_not_export_answer_or_hint_text": true,
+    "record_stage_metrics": [
+      "INITIAL",
+      "FOLLOWUP",
+      "REPAIR",
+      "FORMAT_FALLBACK",
+      "TOOL",
+      "VALIDATION"
+    ],
+    "official_run_requires_langfuse": true
+  },
+  "zdr_preflight_endpoint": "https://openrouter.ai/api/v1/endpoints/zdr",
+  "provider_price_cap_usd_per_million": {
+    "prompt": 1.0,
+    "completion": 5.0
+  },
+  "cost_guard": {
+    "selection_total_hard_cap_usd": 5.0,
+    "must_not_spend_to_cap": true,
+    "stop_if_actual_cost_missing": true,
+    "stop_if_actual_cost_incomplete": true,
+    "preflight_requires_zdr_endpoint_under_price_cap": true,
+    "dedicated_key_limit_lte_usd": 5.0
+  }
+}

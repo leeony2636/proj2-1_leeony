@@ -11,59 +11,15 @@
 
 ## 방탈출 카페 운영 보조 Agent
 
-방탈출 카페에서 발생하는 고객 요청, 힌트 제공, 장비 이상, 게임마스터 호출과 운영 기록을 자연어 기반으로 연결하고, 세션 상태와 운영 정책에 따라 안전하게 처리하는 운영 보조 Agent입니다.
+고객의 힌트·장비 이상·직원 호출·운영 상태 문의를 자연어로 받아, 게임마스터 요청 큐와 안전한 힌트 제공 경로로 연결합니다. 기존 힌트 기능은 운영 보조의 고객 지원 모듈로 유지합니다.
 
-기준 기획안은 [docs/PROJECT_PLAN.md](./docs/PROJECT_PLAN.md)입니다. 변경 내역은 [docs/CHANGE_MAP.md](./docs/CHANGE_MAP.md), 최종 구조는 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)를 기준으로 합니다.
+현재 기준은 [운영 보조 기획](./docs/PROJECT_PLAN.md), [현재 상태](./docs/STATUS.md), [미확정 팀 결정](./docs/TEAM_DECISIONS_NEEDED.md)입니다. `skills/domain_policy.json`의 확정 경계/참고 기준을 LLM 입력에 사용하고, LLM은 복합 의도·필요 조회·질문·지원 필요도를 판단합니다. 코드/MCP는 세션 권한, 승인된 WEAK/STRONG 힌트, ANSWER 동의, 직원 요청 상태와 멱등성을 강제합니다. `15분/50%`와 재요청 횟수 기반 자동 STRONG 규칙은 검토 후 **현재 정책에 채택하지 않았습니다**. RAG와 LangGraph는 사용하지 않습니다.
 
-### 현재 MVP 처리 흐름
+실제 LLM은 `LLM_PROVIDER=openrouter`, 정확한 모델 ID와 별도 키 설정이 필요합니다. `baseline`은 오프라인 구조 smoke/비교용이며 기본 운영 경로에서 자동 대체하지 않습니다. 공식 4모델 선정은 `evals/TEST_POLICY.md`와 `docs/OPENROUTER_ZDR_BUDGET_RUNBOOK.md`를 따르며, ZDR를 강제하고 4개 모델 전체 비용 상한을 `$5`로 둡니다. STT는 Mock Adapter이고, 실제 Provider 품질은 검증되지 않았습니다.
 
-- 고객 요청은 먼저 세션·팀·현재 퍼즐 경계를 코드로 검증합니다.
-- `skills/domain_policy.json`의 버전이 있는 Domain Skill과 최근 대화, 최소 세션 맥락을 LLM에 전달합니다.
-- LLM은 단일 라벨만 반환하는 것이 아니라 복합 의도, 필요한 확인 질문, 읽기 전용 조회 도구, 지원 필요도, 후속 행동을 구조화합니다.
-- 힌트 이력이나 기존 직원 요청 상태가 필요한 경우에만 LLM이 `get_hint_history` 또는 `get_master_request_status`를 선택합니다.
-- 읽기 도구 결과가 생기면 최대 한 번의 `FOLLOWUP_AFTER_TOOLS` LLM 판단으로 실제 후속 행동을 다시 결정합니다.
-- 부작용 도구는 코드가 세션·권한·승인 데이터·idempotency를 검증한 뒤 실행합니다.
-- 힌트 강도의 **의미 판단**은 LLM이 맡고, `hint_policy.py`는 이를 승인된 `WEAK/STRONG` 데이터 단계로 매핑할 뿐 도메인 적절성을 재판정하지 않습니다.
-- 정답은 AnswerVault와 사용자 동의 경계로 분리하며 일반 LLM 응답에 직접 포함하지 않습니다.
-- LLM 실패를 키워드 baseline으로 조용히 대체하지 않습니다. baseline은 비교 실험 전용입니다.
+모델 평가를 시작할 팀은 [평가 실행·사람 검토·Langfuse 점수 기록 절차](./docs/EVALUATION.md#팀이-채울-최소-항목과-실행-순서)를 따르세요. 결과 JSON은 검토 작업용이며, 비교·공유할 데이터는 원문을 제외한 CSV와 Langfuse numeric Score로 남깁니다. 현재 `evals/quality_contract_approval.json`은 팀 승인 대기 상태입니다.
 
-### Domain Skill 적용
-
-- `skills/SKILL.md`: 현장 경험과 과거 판단 기준 원문 보존
-- `skills/domain_policy.json`: 실제 LLM 입력에 쓰는 compact/버전 자산
-- `backend/services/domain_skill.py`: 실제 context 주입과 LLM 자기보고 rule id의 존재 필터링
-
-현재 compact Skill은 `2026-09-22.v3`이며, 위치 혼동 지원 기준과 문제 번호/전체 문제 수 비공개 경계를 실제 LLM 입력에 포함합니다. `15분/50%` 숫자 기반 힌트 강도 규칙과 `재요청 자동 STRONG`은 `unconfirmed_policies`로 유지하고 실행 기준으로 사용하지 않습니다. `applied_skill_rules`는 LLM이 적용했다고 보고한 자기보고 값이며 실제 준수 여부는 별도 평가 대상입니다.
-
-### 코드에 남긴 안전 경계
-
-- 세션·팀·테마 격리, 현재 퍼즐 순서
-- 승인된 힌트만 조회, 승인되지 않은 힌트/정답 생성 금지
-- AnswerVault/사용자 동의
-- 고객 Agent의 진도 직접 변경 금지
-- 시간 연장 자동 적용 금지
-- 장비 직접 조작 금지
-- idempotency와 운영 요청 상태 전이
-- LLM/MCP 출력 스키마와 허용 도구 검증
-
-### 평가와 관측
-
-- 백엔드의 100개 합성 payload 테스트는 **정규화 기술 테스트**입니다. 실제 모델 100건 계약 준수율이 아닙니다.
-- `evals/dataset.jsonl`의 기존 30건은 **합성 seed**이며 사람 Ground Truth로 사용하지 않습니다.
-- `evals/run_llm_eval.py`는 `INITIAL → 선택 조회 → FOLLOWUP → 격리 처리 → 최종 안내` 전체 서비스 흐름을 평가합니다. 운영 데이터 대신 평가 전용 MemoryRuntime을 사용합니다.
-- `evals/run_model_contract_eval.py`는 실제 모델의 raw 계약 준수와 정규화 후 결과, 선택적 재호출 전후를 분리해 측정할 수 있습니다. 외부 호출 승인과 필요한 입력이 없으면 미실행 상태로 기록합니다.
-- Langfuse allowlist는 같은 request/session 식별자로 LLM·lookup·처리 단계를 연결하며 Prompt/Skill version, model, latency, token, retry, provider가 제공한 cost를 기록합니다. 비용 미제공은 0이 아니라 미제공 상태로 유지합니다. 힌트 본문·정답·토큰·전사 원문·불필요한 고객 원문은 보내지 않습니다.
-
-### 현재 범위에서 하지 않는 것
-
-- RAG, LangGraph, 멀티에이전트
-- LLM의 자유로운 힌트·정답 생성
-- 고객 Agent의 진도 직접 변경
-- LLM의 직접 타이머·장비 제어
-- QR 입장, 예약·결제·환불, CRM, 다중 매장 권한 관리
-- CCTV·상시 음성 청취·자동 선제 힌트
-
-실제 Provider 품질평가와 실제 모델 100건 계약 측정, PostgreSQL 원격 연동, Langfuse Dataset/Prompt 교체·롤백, 프론트엔드 `npm ci/test/build`는 외부 환경/의존성 또는 팀 데이터가 필요한 항목이므로 완료로 표시하지 않습니다.
+STT는 제출된 음성을 텍스트로 바꾸는 선택 입력 경계입니다. 상시 주변 음성을 듣지 않으며, 원본 음성과 전사 전문은 기본 로그/Langfuse에 저장하지 않습니다. STT Provider와 모델은 추후 교체 가능한 Adapter로 둡니다.
 
 ## 조원 소개 — 🏁 첫 과제
 
@@ -101,38 +57,13 @@ EVAL_REPORT.md    개선 전후 지표 (제출물)
 docker-compose.yml  `docker compose up` 한 줄 실행 (필수 2)
 ```
 
-음성 입력을 도입할 때도 STT 호출을 UI나 라우터에 흩뿌리지 않고 별도 Adapter로 격리합니다. STT 결과는 기존 `message` 텍스트 계약으로 들어가며, 원본 음성·전사 전문은 기본 로그와 Langfuse에 저장하지 않습니다.
+현재 frontend는 React + TypeScript + Vite 앱이며 `/customer`와 Escape Ops 정적 데모 + 실제 요청 큐 패널이 연결된 `/game-master` 경로를 제공합니다. 정적 데모 데이터는 백엔드 운영 데이터가 아닙니다. 실행 전제와 검증 명령은 [docs/RUN_NOW.md](./docs/RUN_NOW.md)와 [docs/TESTING.md](./docs/TESTING.md)를 참고하세요.
 
-현재 frontend는 React + TypeScript + Vite 앱이며 `/customer`와 `/game-master` 경로를 제공합니다.
+기능별 구현 기준은 [docs/guides/00-development-principles.md](./docs/guides/00-development-principles.md)에서 시작하세요. 세션, STT, 힌트 정책, 정답 동의, 게임마스터, MCP, PostgreSQL, LLM, 프론트엔드, 배포·평가 가이드가 기능별로 분리되어 있습니다.
 
-최종 문서는 아래 6개를 기준으로 봅니다.
-- [docs/PROJECT_PLAN.md](./docs/PROJECT_PLAN.md) — 문제 정의와 LLM/코드 역할
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 현재 처리 흐름
-- [docs/CHANGE_MAP.md](./docs/CHANGE_MAP.md) — 수정·확대·축소·제거 내역
-- [docs/EVALUATION.md](./docs/EVALUATION.md) — 평가 계획
-- [docs/TRUST_BOUNDARY.md](./docs/TRUST_BOUNDARY.md) — 신뢰 경계
-- [docs/TEAM_DECISIONS_NEEDED.md](./docs/TEAM_DECISIONS_NEEDED.md) — 팀 결정이 필요한 미확정 사항
+**착수 후 9/23(수)까지 문제 정의와 `evals/`를 채우세요.** 추석 연휴 전에 이 둘이 있어야 연휴 동안 각자 진행할 수 있습니다.
 
-**2차 프로젝트에서는 RAG와 LangGraph를 사용하지 않습니다.**
-
-### 로컬 검증
-
-```bash
-# 백엔드 단위/통합 테스트
-python -m pytest backend/tests -q
-
-# 합성 seed 전체 서비스 흐름 smoke (실제 도메인 품질 점수 아님)
-python evals/run_llm_eval.py --provider baseline --output evals/results/baseline_service_flow.json
-
-# 프론트엔드 (의존성 설치 후)
-cd frontend
-npm ci
-npm test -- --run
-npm run build
-```
-
-실제 LLM 경로는 `.env.example`을 참고해 환경변수를 설정한 뒤 사용합니다. API 키는 `.env`에만 저장하고 커밋하지 않습니다.
-사람이 판정한 실제 Domain Dataset이 준비되기 전에는 합성 seed 결과를 모델 품질 점수로 해석하지 않습니다.
+프로젝트 요구사항은 [2차 프로젝트 기획](./docs/PROJECT_PLAN.md), [현재 상태](./docs/STATUS.md), 실행·검증은 [docs/TESTING.md](./docs/TESTING.md)를 기준으로 확인하세요.
 
 ## 🔑 시크릿 규칙 (위반 시 전원에게 노출됩니다)
 

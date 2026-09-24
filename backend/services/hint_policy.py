@@ -35,3 +35,4 @@ def select_approved_hint_strength(
 # 이전 테스트/호출부가 남아 있을 때 실패 원인을 명확하게 하기 위한 호환 alias.
 def enforce_hint_policy(**kwargs) -> HintDecision:
     return select_approved_hint_strength(**kwargs)
+

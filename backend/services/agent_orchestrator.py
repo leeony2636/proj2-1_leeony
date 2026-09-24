@@ -54,24 +54,41 @@ def _decision_audit(stage: str, intent: IntentResult) -> dict[str, Any]:
 
 
 def _record_response_event(event_name: str, request: AgentRequest, response: AgentResponse) -> None:
-    payload = response.model_dump(mode="json")
-    payload.update({"trace_id": request.request_id, "request_id": request.request_id})
-    record_event(event_name, payload)
+    # 외부 관측 경계에는 고객 원문/힌트 원문/직원 summary를 보내지 않는다.
+    record_event(
+        event_name,
+        {
+            "trace_id": request.request_id,
+            "request_id": request.request_id,
+            "session_id": response.session_id,
+            "status": response.status.value,
+            "intent": response.intent.value if response.intent else None,
+            "selected_tools": list(response.selected_tools),
+            "completed_actions": [item.value for item in response.completed_actions],
+            "pending_actions": [item.value for item in response.pending_actions],
+            "llm_provider": response.llm_provider,
+            "llm_model": response.llm_model,
+            "prompt_version": response.prompt_version,
+            "skill_version": response.skill_version,
+            "llm_call_count": response.llm_call_count,
+            "decision_source": response.decision_source,
+        },
+    )
 
 
 def _get_hint_with_retry(
-    theme_id: str,
+    session_id: str,
+    team_id: str,
     puzzle_id: str,
     strength: str,
     *,
     request_id: str | None = None,
-    session_id: str | None = None,
 ) -> str:
     """승인 힌트 조회의 일시적인 연결 오류만 1회 재시도한다."""
     for attempt in range(2):
         started = time.perf_counter()
         try:
-            value = mcp.get_hint(theme_id, puzzle_id, strength)
+            value = mcp.get_hint(session_id, team_id, puzzle_id, strength)
             record_event(
                 "tool_call",
                 {
@@ -131,6 +148,7 @@ def _execute_lookup_tools(
     team_id: str,
     puzzle_id: str | None,
     request_id: str | None = None,
+    evaluation_audit: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, object], list[str]]:
     """LLM이 선택한 읽기 전용 조회만 코드 경계 안에서 실행한다."""
     results: dict[str, object] = {}
@@ -143,7 +161,7 @@ def _execute_lookup_tools(
                 if puzzle_id is None:
                     results[lookup.value] = {"status": "NOT_AVAILABLE", "reason": "PUZZLE_ID_REQUIRED"}
                 else:
-                    history = mcp.get_history(session_id, puzzle_id)
+                    history = mcp.get_history(session_id, team_id, puzzle_id)
                     results[lookup.value] = [
                         item.model_dump(mode="json") if hasattr(item, "model_dump") else dict(item)
                         for item in history[-5:]
@@ -154,6 +172,7 @@ def _execute_lookup_tools(
                 executed.append(lookup.value)
             else:
                 continue
+            tool_latency_ms = round((time.perf_counter() - started) * 1000, 2)
             record_event(
                 "tool_call",
                 {
@@ -162,10 +181,22 @@ def _execute_lookup_tools(
                     "session_id": session_id,
                     "tool_name": lookup.value,
                     "tool_status": "SUCCESS",
-                    "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                    "latency_ms": tool_latency_ms,
+                },
+            )
+            _append_audit(
+                evaluation_audit,
+                {
+                    "stage": "TOOL_CALL",
+                    "tool_name": lookup.value,
+                    "tool_status": "SUCCESS",
+                    "latency_ms": tool_latency_ms,
+                    "result_size_chars": len(str(results.get(lookup.value))),
+                    "llm_tokens_used_by_tool_execution": 0,
                 },
             )
         except Exception as exc:
+            tool_latency_ms = round((time.perf_counter() - started) * 1000, 2)
             record_event(
                 "tool_call",
                 {
@@ -175,7 +206,18 @@ def _execute_lookup_tools(
                     "tool_name": lookup.value,
                     "tool_status": "FAILED",
                     "error_type": type(exc).__name__,
-                    "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                    "latency_ms": tool_latency_ms,
+                },
+            )
+            _append_audit(
+                evaluation_audit,
+                {
+                    "stage": "TOOL_CALL",
+                    "tool_name": lookup.value,
+                    "tool_status": "FAILED",
+                    "latency_ms": tool_latency_ms,
+                    "error_type": type(exc).__name__,
+                    "llm_tokens_used_by_tool_execution": 0,
                 },
             )
             raise
@@ -249,30 +291,21 @@ def handle_agent_request(
         _record_response_event("agent_request_closed", request, response)
         return response
 
-    # 다른 순서 퍼즐은 LLM에 퍼즐 내용을 노출하기 전에 코드가 차단한다.
+    # build_agent_context가 고객 puzzle_id 불일치를 LLM/MCP 조회 전에 차단한다.
+    # 방어적으로 이 경로에 도달해도 운영 큐를 만들거나 다른 퍼즐을 조회하지 않는다.
     if effective_puzzle_id and session.current_puzzle_id and effective_puzzle_id != session.current_puzzle_id:
-        reason = "PUZZLE_SEQUENCE_MISMATCH"
-        master_request = mcp.call_master(
-            request.session_id,
-            request.team_id,
-            reason,
-            f"{request.request_id}:MASTER_REQUEST",
-        )
         response = AgentResponse(
-            status=AgentStatus.MASTER_REQUEST,
+            status=AgentStatus.NEED_MORE_INFO,
             session_id=session.session_id,
             team_id=session.team_id,
-            puzzle_id=effective_puzzle_id,
-            decision_source="SPOILER_POLICY_HANDOFF",
-            reason_codes=[reason],
-            selected_tools=["request_game_master"],
-            next_action="WAIT_FOR_GAME_MASTER",
-            customer_message="현재 진행 범위를 벗어난 요청이라 직원 확인을 접수했습니다.",
-            completed_actions=[AgentActionType.REQUEST_GAME_MASTER],
-            master_request_ids=[master_request["request_id"]],
+            puzzle_id=session.current_puzzle_id,
+            decision_source="PUZZLE_ID_GUARD",
+            reason_codes=["PUZZLE_ID_MISMATCH"],
+            next_action="REFRESH_CURRENT_PUZZLE",
+            customer_message="현재 진행 중인 문제 정보와 요청이 일치하지 않습니다. 화면을 새로고침한 뒤 다시 요청해 주세요.",
         )
         _append_audit(evaluation_audit, {"stage": "FINAL_RESPONSE", **response.model_dump(mode="json")})
-        _record_response_event("spoiler_guard_handoff", request, response)
+        _record_response_event("puzzle_id_mismatch", request, response)
         return response
 
     # 2) LLM 1차 판단: 의미/복합성/필요 조회/질문/행동 계획을 구조화한다.
@@ -306,17 +339,43 @@ def handle_agent_request(
     _append_audit(evaluation_audit, _decision_audit("INITIAL_DECISION", intent))
     llm_call_count = 1
     selected_tools: list[str] = []
-    mcp.record_conversation_turn(session.session_id, "user", request.message, request.request_id)
 
     # 3) 과거 상태가 필요한 경우에만 LLM이 고른 읽기 전용 조회를 실행하고 2차 판단한다.
     if intent.lookup_tools:
-        tool_results, lookup_tools = _execute_lookup_tools(
-            intent,
-            session_id=session.session_id,
-            team_id=session.team_id,
-            puzzle_id=effective_puzzle_id,
-            request_id=request.request_id,
-        )
+        try:
+            tool_results, lookup_tools = _execute_lookup_tools(
+                intent,
+                session_id=session.session_id,
+                team_id=session.team_id,
+                puzzle_id=effective_puzzle_id,
+                request_id=request.request_id,
+                evaluation_audit=evaluation_audit,
+            )
+        except Exception as exc:
+            # 수정 사유: 선택 조회 실패를 LLM 추측이나 부작용 실행으로 이어가지 않는다.
+            # 사용자는 안전한 실패 상태를 받고, 운영자는 request_id로 실패 단계를 추적한다.
+            response = AgentResponse(
+                status=AgentStatus.ERROR,
+                session_id=session.session_id,
+                team_id=session.team_id,
+                puzzle_id=effective_puzzle_id,
+                intent=intent.intent,
+                emotion=intent.emotion,
+                decision_source="READ_ONLY_TOOL_ERROR",
+                reason_codes=["LOOKUP_TOOL_FAILED", type(exc).__name__],
+                selected_tools=[item.value for item in intent.lookup_tools],
+                llm_provider=intent.provider,
+                llm_model=intent.model,
+                prompt_version=intent.prompt_version,
+                skill_version=intent.skill_version,
+                llm_call_count=llm_call_count,
+                next_action="RETRY_OR_OPERATOR_CHECK",
+                customer_message="운영 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+            )
+            _append_audit(evaluation_audit, {"stage": "ERROR", "where": "LOOKUP_TOOL", "error_type": type(exc).__name__})
+            _append_audit(evaluation_audit, {"stage": "FINAL_RESPONSE", **response.model_dump(mode="json")})
+            _record_response_event("lookup_tool_failed", request, response)
+            return response
         selected_tools.extend(lookup_tools)
         context.tool_results = tool_results
         _append_audit(
@@ -359,12 +418,41 @@ def handle_agent_request(
             _record_response_event("llm_followup_failed", request, response)
             return response
 
-        # 반복 lookup 루프는 만들지 않는다. 추가 조회가 또 필요하면 질문/직원 확인으로 종료한다.
+        # 반복 lookup 루프는 만들지 않는다. FOLLOWUP이 다시 조회를 요구한 상태에서는
+        # 필요한 정보가 아직 부족하므로 action을 실행하지 않는다. 조회 요청만 지운 뒤
+        # write를 진행하거나 자동으로 직원을 호출하지 않는다.
         if intent.lookup_tools:
-            intent.lookup_tools = []
-            intent.context_notes.append("추가 조회 요청은 1회 follow-up 제한으로 실행하지 않음")
+            response = AgentResponse(
+                status=AgentStatus.NEED_MORE_INFO,
+                session_id=session.session_id,
+                team_id=session.team_id,
+                puzzle_id=effective_puzzle_id,
+                intent=intent.intent,
+                emotion=intent.emotion,
+                decision_source="FOLLOWUP_LOOKUP_LIMIT_GUARD",
+                reason_codes=["FOLLOWUP_LOOKUP_LIMIT_REACHED"],
+                selected_tools=selected_tools,
+                llm_provider=intent.provider,
+                llm_model=intent.model,
+                prompt_version=intent.prompt_version,
+                skill_version=intent.skill_version,
+                llm_call_count=llm_call_count,
+                next_action="ASK_CLARIFICATION",
+                customer_message=(intent.clarifying_question or "추가 확인이 필요한 상태라 자동 처리를 중단했습니다. 필요한 내용을 조금 더 알려주세요."),
+                pending_actions=[AgentActionType.ASK_CLARIFICATION],
+                context_notes=list(intent.context_notes) + ["추가 조회 요청은 1회 follow-up 제한으로 실행하지 않음"],
+            )
+            _append_audit(evaluation_audit, {"stage": "LOOKUP_LIMIT_STOP", "requested_tools": [x.value for x in intent.lookup_tools]})
+            _append_audit(evaluation_audit, {"stage": "FINAL_RESPONSE", **response.model_dump(mode="json")})
+            _record_response_event("followup_lookup_limit_stop", request, response)
+            return response
 
     actions = list(intent.actions)
+
+    # 여기까지 도달했다는 것은 INITIAL/FOLLOWUP JSON·schema·확정 policy 검증이 모두
+    # 통과했다는 뜻이다. 계약 실패에서는 conversation/GM/hint write가 0회여야 하므로
+    # 사용자 대화 기록도 이 지점 이후에만 수행한다.
+    mcp.record_conversation_turn(session.session_id, "user", request.message, request.request_id)
 
     # 4) 조회 결과까지 본 뒤에도 정보가 부족하면 부작용 실행 전에 질문한다.
     if intent.needs_clarification or AgentActionType.ASK_CLARIFICATION in actions:
@@ -419,8 +507,10 @@ def handle_agent_request(
             item = mcp.call_master(
                 request.session_id,
                 request.team_id,
-                _staff_handoff_detail(intent),
+                "DIRECT_REQUEST",
                 f"{request.request_id}:MASTER_REQUEST",
+                puzzle_id=effective_puzzle_id,
+                summary=_staff_handoff_detail(intent),
             )
             completed.append(action)
             selected_tools.append("request_game_master")
@@ -442,8 +532,10 @@ def handle_agent_request(
             item = mcp.call_master(
                 request.session_id,
                 request.team_id,
-                _staff_handoff_detail(intent),
+                "DIRECT_REQUEST",
                 f"{request.request_id}:TIME_EXTENSION",
+                puzzle_id=effective_puzzle_id,
+                summary=_staff_handoff_detail(intent),
             )
             completed.append(action)
             selected_tools.append("request_game_master")
@@ -475,18 +567,20 @@ def handle_agent_request(
             reason_codes.extend(decision.reason_codes)
             try:
                 hint_text = _get_hint_with_retry(
-                    session.theme_id,
+                    session.session_id,
+                    session.team_id,
                     effective_puzzle_id,
                     decision.strength.value,
                     request_id=request.request_id,
-                    session_id=session.session_id,
                 )
             except KeyError:
                 item = mcp.call_master(
                     request.session_id,
                     request.team_id,
-                    "APPROVED_HINT_DATA_MISSING",
+                    "ABNORMAL_STATE",
                     f"{request.request_id}:APPROVED_HINT_MISSING",
+                    puzzle_id=effective_puzzle_id,
+                    summary="APPROVED_HINT_DATA_MISSING",
                 )
                 pending.append(AgentActionType.REQUEST_GAME_MASTER)
                 selected_tools.append("request_game_master")
@@ -621,6 +715,19 @@ def handle_agent_request(
     if context.tool_results:
         decision_source += "+TOOL_FOLLOWUP"
     decision_source += "+CODE_GUARD"
+
+    _append_audit(
+        evaluation_audit,
+        {
+            "stage": "EXECUTION",
+            "completed_actions": [item.value for item in completed],
+            "pending_actions": [item.value for item in pending],
+            "selected_tools": list(selected_tools),
+            "master_request_ids": list(master_request_ids),
+            "hint_delivered": hint_text is not None,
+            "answer_offer_created": answer_offer is not None,
+        },
+    )
 
     response = AgentResponse(
         status=status,

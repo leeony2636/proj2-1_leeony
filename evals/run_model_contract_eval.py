@@ -15,6 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from dotenv import load_dotenv
+
+# 로컬 VS Code/PowerShell 실행 시 .env를 읽되, 이미 설정된 환경변수는 덮어쓰지 않는다.
+load_dotenv(ROOT / ".env", override=False)
+
 from backend.schemas import AgentContext
 from backend.services.domain_skill import build_llm_skill_context
 from backend.services.llm import analyze_user_request
@@ -194,3 +199,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

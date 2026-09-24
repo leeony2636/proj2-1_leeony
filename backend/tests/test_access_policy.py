@@ -15,7 +15,7 @@ class AccessPolicyTests(unittest.TestCase):
             message="힌트 주세요",
         )
 
-        with self.assertRaisesRegex(ValueError, "TEAM_SESSION_MISMATCH"):
+        with self.assertRaisesRegex(PermissionError, "TEAM_SESSION_MISMATCH"):
             handle_agent_request(request)
 
     def test_closed_session_cannot_receive_hint(self):
@@ -35,20 +35,19 @@ class AccessPolicyTests(unittest.TestCase):
         self.assertEqual(response.status, AgentStatus.CLOSED)
         self.assertIsNone(response.hint_text)
 
-    def test_future_puzzle_request_is_handed_to_game_master(self):
+    def test_future_puzzle_request_is_blocked_without_side_effect(self):
         session = mcp.create_session("last_train", "team-future")
-        response = handle_agent_request(
-            AgentRequest(
-                session_id=session["session_id"],
-                team_id="team-future",
-                puzzle_id="train-p02",
-                message="2번 퍼즐 힌트 주세요",
+        before = len(mcp.master_requests())
+        with self.assertRaisesRegex(ValueError, "PUZZLE_ID_MISMATCH"):
+            handle_agent_request(
+                AgentRequest(
+                    session_id=session["session_id"],
+                    team_id="team-future",
+                    puzzle_id="train-p02",
+                    message="2번 퍼즐 힌트 주세요",
+                )
             )
-        )
-
-        self.assertEqual(response.status, AgentStatus.MASTER_REQUEST)
-        self.assertIn("PUZZLE_SEQUENCE_MISMATCH", response.reason_codes)
-        self.assertIsNone(response.hint_text)
+        self.assertEqual(len(mcp.master_requests()), before)
 
 
 if __name__ == "__main__":

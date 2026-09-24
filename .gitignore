@@ -29,9 +29,8 @@ build/
 # 로그
 *.log
 
+# 실시간 유료 모델 평가 결과 (prompt/response 원문 보관 금지)
+evals/results/live_runs/
+
 # Codex execution-plan scratch ledger
 .superpowers/
-
-# Local evaluation run outputs
-evals/results/*.json
-!evals/results/.gitkeep

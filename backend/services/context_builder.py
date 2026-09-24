@@ -22,16 +22,26 @@ def build_agent_context(
     힌트 이력·운영 요청 상태처럼 상황에 따라 필요한 조회는 LLM이 읽기 전용
     lookup tool을 선택한 뒤에만 가져온다. 모든 요청에 고정 조회 순서를 강제하지 않는다.
     """
-    session = SessionState.model_validate(mcp.get_session(session_id))
-    if session.team_id != team_id:
-        raise ValueError("TEAM_SESSION_MISMATCH")
+    # 세션/팀 권한 오류는 PermissionError로 유지해 API 403 경계와 구분한다.
+    session = SessionState.model_validate(mcp.get_agent_session(session_id, team_id))
 
-    effective_puzzle_id = requested_puzzle_id or session.current_puzzle_id
+    # 서버 세션의 current_puzzle_id가 정본이다. 고객 puzzle_id는 호환을 위한
+    # 후보값일 뿐이며, 불일치는 조용히 덮어쓰지 않고 LLM/MCP 조회 전에 종료한다.
+    if (
+        requested_puzzle_id is not None
+        and session.current_puzzle_id is not None
+        and requested_puzzle_id != session.current_puzzle_id
+    ):
+        raise ValueError("PUZZLE_ID_MISMATCH")
+
+    effective_puzzle_id = session.current_puzzle_id
     puzzle_context = None
-
-    # 다른 순서 퍼즐의 내용은 LLM에 넣기 전에 차단한다.
-    if effective_puzzle_id and session.current_puzzle_id and effective_puzzle_id == session.current_puzzle_id:
-        puzzle_context = mcp.get_puzzle(session.theme_id, effective_puzzle_id)
+    if effective_puzzle_id and not session.is_closed:
+        puzzle_context = mcp.get_puzzle(
+            session.session_id,
+            session.team_id,
+            effective_puzzle_id,
+        )
 
     context = AgentContext(
         session_id=session.session_id,
@@ -45,3 +55,4 @@ def build_agent_context(
         domain_skill=build_llm_skill_context(),
     )
     return session, context
+
